@@ -1,596 +1,1942 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>zipkey — zip password recovery</title>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>KEYSMITH — ZIP Toolkit</title>
 <style>
   :root{
-    --bg:#0b0d10; --panel:#11151a; --panel2:#161b21; --line:#1f262f;
-    --txt:#c9d2db; --dim:#6b7683; --acc:#4ea1ff; --ok:#4ade80; --bad:#f87171; --warn:#fbbf24;
-    --mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
+    --bg:#07080a; --panel:#0c0f13; --panel2:#0a0d10; --line:#1b2129; --line2:#242c36;
+    --txt:#c8d2dd; --dim:#697586; --dim2:#4c5765;
+    --acc:#35e0a1; --acc-d:#1a7d5c; --blue:#58a6ff; --amber:#f0b429; --bad:#ff5f56;
+    --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    --r:14px;
   }
   *{box-sizing:border-box}
-  html,body{margin:0;background:var(--bg);color:var(--txt);font-family:var(--mono);font-size:13px;line-height:1.5}
-  .wrap{max-width:880px;margin:0 auto;padding:30px 18px 70px}
-  h1{font-size:15px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#eaf0f6;margin:0}
-  .sub{color:var(--dim);margin:6px 0 26px;font-size:12px}
-  .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:14px}
-  .lbl{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin-bottom:8px;display:block}
+  html,body{margin:0;min-height:100%}
+  body{
+    background:
+      radial-gradient(1100px 520px at 12% -12%, rgba(53,224,161,.07), transparent 62%),
+      radial-gradient(900px 480px at 108% 4%, rgba(88,166,255,.06), transparent 58%),
+      var(--bg);
+    color:var(--txt);
+    font:14px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  ::selection{background:rgba(53,224,161,.25)}
 
-  #drop{border:1px dashed #2a333d;border-radius:8px;padding:26px 18px;text-align:center;cursor:pointer;transition:.15s;background:var(--panel2)}
-  #drop.hover{border-color:var(--acc);background:#131b25}
-  #drop.has{border-style:solid;border-color:#2f3a46}
-  #zipname{color:var(--acc);font-size:12px}
-  .hint{color:var(--dim);font-size:11px;margin-top:6px}
+  /* ---------- header ---------- */
+  header{
+    position:sticky; top:0; z-index:40;
+    backdrop-filter:blur(14px);
+    background:rgba(7,8,10,.82);
+    border-bottom:1px solid var(--line);
+  }
+  .wrap{max-width:1180px;margin:0 auto;padding:0 20px}
+  .top{display:flex;align-items:center;gap:14px;height:64px}
+  .mark{
+    width:36px;height:36px;flex:0 0 36px;border-radius:10px;
+    display:grid;place-items:center;
+    background:linear-gradient(160deg,#11241d,#0b1410);
+    border:1px solid #1f3a30;
+    color:var(--acc);
+    box-shadow:0 0 22px rgba(53,224,161,.10) inset;
+  }
+  .mark svg{width:20px;height:20px}
+  .brand h1{margin:0;font-size:15px;letter-spacing:.16em;font-weight:600;color:#e6eef6}
+  .brand p{margin:1px 0 0;font-size:11px;letter-spacing:.1em;color:var(--dim2);text-transform:uppercase}
+  .spacer{flex:1}
+  .pill{
+    font:11px/1 var(--mono);letter-spacing:.08em;color:var(--dim);
+    border:1px solid var(--line2);border-radius:999px;padding:6px 10px;white-space:nowrap;
+  }
+  .pill b{color:var(--acc);font-weight:600}
 
-  .modes{display:flex;gap:8px;margin-bottom:14px}
-  .mode{flex:1;padding:9px 12px;background:var(--panel2);border:1px solid var(--line);border-radius:6px;color:var(--dim);
-        cursor:pointer;text-align:center;font-family:var(--mono);font-size:12px;letter-spacing:.05em;transition:.12s}
-  .mode.on{color:#eaf0f6;border-color:var(--acc);background:#101a26}
+  nav{display:flex;gap:4px;overflow-x:auto;padding-bottom:10px;scrollbar-width:none}
+  nav::-webkit-scrollbar{display:none}
+  .tab{
+    display:flex;align-items:center;gap:8px;flex:0 0 auto;
+    padding:9px 13px;border-radius:10px;
+    background:transparent;border:1px solid transparent;
+    color:var(--dim);font:500 13px/1 inherit;cursor:pointer;
+    transition:.15s;
+  }
+  .tab svg{width:16px;height:16px;opacity:.75}
+  .tab:hover{color:#a8b4c2;background:rgba(255,255,255,.025)}
+  .tab.on{
+    color:#dff7ec;background:linear-gradient(180deg,rgba(53,224,161,.10),rgba(53,224,161,.03));
+    border-color:rgba(53,224,161,.28);
+    box-shadow:0 0 20px rgba(53,224,161,.07);
+  }
+  .tab.on svg{opacity:1;color:var(--acc)}
 
-  textarea{width:100%;min-height:150px;background:#0c1015;border:1px solid var(--line);border-radius:6px;color:var(--txt);
-           font-family:var(--mono);font-size:12px;padding:10px;resize:vertical;outline:none}
-  textarea:focus{border-color:#2e4a68}
-  input[type=text],input[type=number]{background:#0c1015;border:1px solid var(--line);border-radius:6px;color:var(--txt);
-           font-family:var(--mono);font-size:12px;padding:8px 10px;outline:none;width:100%}
-  input[type=text]:focus,input[type=number]:focus{border-color:#2e4a68}
+  /* ---------- layout ---------- */
+  main{max-width:1180px;margin:0 auto;padding:22px 20px 80px}
+  .panel{display:none;animation:fade .18s ease}
+  .panel.on{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 
-  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px}
-  .row > *{flex:1 1 auto}
-  .row .tight{flex:0 0 auto}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+  @media(max-width:880px){.grid2{grid-template-columns:1fr}}
 
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:6px}
-  .chk{display:flex;align-items:center;gap:7px;background:var(--panel2);border:1px solid var(--line);
-       border-radius:6px;padding:8px 10px;cursor:pointer;font-size:12px;color:var(--txt)}
-  .chk input{accent-color:var(--acc);margin:0}
-  .chk span{color:var(--dim);font-size:11px}
+  .card{
+    background:linear-gradient(180deg,var(--panel),var(--panel2));
+    border:1px solid var(--line);border-radius:var(--r);padding:16px;
+  }
+  .card + .card{margin-top:14px}
+  .cardhead{display:flex;align-items:center;gap:10px;margin-bottom:13px}
+  .cardhead h2{margin:0;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--dim);font-weight:600}
+  .cardhead .badge{margin-left:auto}
 
-  .btns{display:flex;gap:10px;margin-top:6px}
-  button{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;padding:11px 18px;
-         border-radius:6px;border:1px solid var(--line);background:var(--panel2);color:var(--txt);cursor:pointer;transition:.12s}
-  button:hover:not(:disabled){border-color:#33414f}
-  button:disabled{opacity:.35;cursor:not-allowed}
-  #start{flex:1;background:#12233a;border-color:#2c4f7c;color:#cfe3ff}
-  #start:hover:not(:disabled){background:#17304f;border-color:var(--acc)}
-  #cancel{background:#2a1416;border-color:#5a2228;color:#ffb4b4;display:none}
-  #cancel:hover:not(:disabled){background:#3a1a1d}
+  .badge{
+    font:11px/1 var(--mono);padding:5px 9px;border-radius:7px;
+    border:1px solid var(--line2);color:var(--dim);background:#0a0d11;white-space:nowrap;
+  }
+  .badge.ok{border-color:rgba(53,224,161,.35);color:var(--acc);background:rgba(53,224,161,.06)}
+  .badge.warn{border-color:rgba(240,180,41,.35);color:var(--amber);background:rgba(240,180,41,.06)}
+  .badge.bad{border-color:rgba(255,95,86,.35);color:var(--bad);background:rgba(255,95,86,.06)}
+  .badge.live{border-color:rgba(88,166,255,.35);color:var(--blue);background:rgba(88,166,255,.06)}
 
-  .barwrap{height:6px;background:#0c1015;border-radius:3px;overflow:hidden;margin:14px 0 10px;border:1px solid var(--line)}
-  #bar{height:100%;width:0;background:linear-gradient(90deg,#2c6fc4,#4ea1ff);transition:width .2s}
+  /* ---------- drop ---------- */
+  .drop{
+    display:flex;align-items:center;gap:14px;
+    border:1.5px dashed var(--line2);border-radius:12px;
+    padding:20px 16px;cursor:pointer;transition:.16s;
+    background:rgba(255,255,255,.012);
+  }
+  .drop:hover,.drop.over{border-color:rgba(53,224,161,.55);background:rgba(53,224,161,.045)}
+  .drop svg{width:26px;height:26px;color:var(--dim);flex:0 0 26px}
+  .drop.over svg,.drop:hover svg{color:var(--acc)}
+  .drop strong{display:block;font-size:13px;color:#dbe5ef}
+  .drop span{display:block;font-size:12px;color:var(--dim2);margin-top:2px}
+  .drop .fname{font:12px/1.4 var(--mono);color:var(--acc);word-break:break-all}
 
-  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
-  .stat{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:9px 11px}
-  .stat .k{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
-  .stat .v{font-size:14px;color:#eaf0f6;margin-top:3px}
+  /* ---------- inputs ---------- */
+  .lbl{display:block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim2);margin:14px 0 6px}
+  .inp{
+    width:100%;background:#080b0e;border:1px solid var(--line2);border-radius:9px;
+    color:var(--txt);padding:9px 11px;font:13px/1.5 inherit;outline:none;transition:.15s;
+  }
+  .inp:focus{border-color:rgba(53,224,161,.5);box-shadow:0 0 0 3px rgba(53,224,161,.07)}
+  .inp.mono{font-family:var(--mono);font-size:12.5px}
+  .inp.sm{width:64px}
+  textarea.inp{resize:vertical;min-height:90px}
+  select.inp{appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--dim) 50%),linear-gradient(135deg,var(--dim) 50%,transparent 50%);background-position:calc(100% - 16px) 50%,calc(100% - 11px) 50%;background-size:5px 5px,5px 5px;background-repeat:no-repeat;padding-right:32px}
 
-  #status{color:var(--dim);font-size:12px;margin-top:12px;min-height:18px}
-  #status.ok{color:var(--ok)} #status.bad{color:var(--bad)} #status.warn{color:var(--warn)}
+  .row{display:flex;align-items:center;gap:8px;margin-top:10px}
+  .row.wrap{flex-wrap:wrap}
+  .hint{font-size:11.5px;color:var(--dim2)}
+  .keyspace{font:12px/1.5 var(--mono);color:var(--dim);margin-top:8px;padding:8px 10px;background:#080b0e;border:1px solid var(--line);border-radius:8px}
+  .keyspace b{color:var(--acc)}
 
-  #result{display:none;margin-top:14px;border:1px solid #234d33;background:#0e1b13;border-radius:8px;padding:14px}
-  #result .k{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#5f9c76}
-  #rpw{font-size:20px;color:#7ff0a8;word-break:break-all;margin:6px 0 10px;letter-spacing:.03em}
-  #copy{font-size:11px;padding:7px 13px}
+  .btn{
+    display:inline-flex;align-items:center;gap:7px;
+    padding:9px 16px;border-radius:9px;cursor:pointer;
+    background:linear-gradient(180deg,#2ad494,#1aa874);
+    color:#04150e;border:1px solid #35e0a1;
+    font:600 13px/1 inherit;letter-spacing:.02em;transition:.15s;
+  }
+  .btn:hover{filter:brightness(1.08);box-shadow:0 0 22px rgba(53,224,161,.22)}
+  .btn:disabled{opacity:.35;cursor:not-allowed;filter:none;box-shadow:none}
+  .btn.ghost{
+    background:#0d1116;color:var(--txt);border:1px solid var(--line2);
+  }
+  .btn.ghost:hover{border-color:#37424f;background:#11161c;box-shadow:none}
+  .btn.danger{background:linear-gradient(180deg,#ff6b62,#d33f36);border-color:#ff5f56;color:#1a0605}
 
-  #meta{color:var(--dim);font-size:11px;margin-top:12px}
-  code{color:#8fc7ff}
+  /* ---------- segmented ---------- */
+  .seg{display:flex;gap:4px;background:#080b0e;border:1px solid var(--line);border-radius:10px;padding:4px}
+  .seg button{
+    flex:1;padding:8px 6px;border-radius:7px;border:none;cursor:pointer;
+    background:transparent;color:var(--dim);font:500 12.5px/1 inherit;transition:.14s;
+  }
+  .seg button:hover{color:#a8b4c2}
+  .seg button.on{background:rgba(53,224,161,.12);color:var(--acc);box-shadow:0 0 0 1px rgba(53,224,161,.22) inset}
+
+  .modebox{display:none;margin-top:12px}
+  .modebox.on{display:block}
+
+  .chk{display:inline-flex;align-items:center;gap:6px;font:12.5px/1 var(--mono);color:var(--dim);cursor:pointer;padding:6px 9px;border:1px solid var(--line);border-radius:8px;background:#080b0e}
+  .chk:hover{border-color:var(--line2)}
+  .chk input{accent-color:#35e0a1;margin:0}
+  .chk.on{color:var(--acc);border-color:rgba(53,224,161,.35);background:rgba(53,224,161,.06)}
+
+  /* ---------- run ---------- */
+  .bar{height:7px;border-radius:99px;background:#080b0e;border:1px solid var(--line);overflow:hidden}
+  .fill{height:100%;width:0%;border-radius:99px;background:linear-gradient(90deg,#1aa874,#35e0a1,#58a6ff);transition:width .2s linear}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}
+  @media(max-width:620px){.stats{grid-template-columns:repeat(2,1fr)}}
+  .stats div{background:#080b0e;border:1px solid var(--line);border-radius:9px;padding:9px 11px}
+  .stats span{display:block;font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim2)}
+  .stats b{display:block;font:600 15px/1.4 var(--mono);color:#dbe5ef}
+
+  .result{
+    margin-top:14px;padding:14px;border-radius:10px;
+    border:1px solid rgba(53,224,161,.4);
+    background:linear-gradient(180deg,rgba(53,224,161,.10),rgba(53,224,161,.03));
+    display:flex;align-items:center;gap:14px;flex-wrap:wrap;
+  }
+  .result .pw{font:600 17px/1.3 var(--mono);color:#dff7ec;word-break:break-all;flex:1;min-width:160px}
+  .result small{display:block;font-size:10.5px;letter-spacing:.12em;text-transform:uppercase;color:var(--acc);margin-bottom:4px}
+
+  .log{
+    margin-top:14px;height:150px;overflow-y:auto;
+    background:#06080a;border:1px solid var(--line);border-radius:9px;
+    padding:10px 12px;font:11.5px/1.65 var(--mono);color:var(--dim);
+  }
+  .log .l{white-space:pre-wrap;word-break:break-word}
+  .log .g{color:var(--acc)}
+  .log .y{color:var(--amber)}
+  .log .r{color:var(--bad)}
+  .log .b{color:var(--blue)}
+  .log .d{color:var(--dim2)}
+  .log::-webkit-scrollbar{width:8px}
+  .log::-webkit-scrollbar-thumb{background:#1c242e;border-radius:8px}
+
+  /* ---------- table ---------- */
+  table{width:100%;border-collapse:collapse;font:12px/1.5 var(--mono)}
+  th{text-align:left;font-weight:600;color:var(--dim2);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;padding:8px 10px;border-bottom:1px solid var(--line2)}
+  td{padding:8px 10px;border-bottom:1px solid #12171d;color:#a8b4c2;vertical-align:top;word-break:break-all}
+  tr:hover td{background:rgba(255,255,255,.018)}
+  .tag{display:inline-block;font-size:10px;padding:2px 6px;border-radius:5px;border:1px solid var(--line2);color:var(--dim)}
+  .tag.e{border-color:rgba(240,180,41,.4);color:var(--amber)}
+  .tag.a{border-color:rgba(88,166,255,.4);color:var(--blue)}
+  .tag.p{border-color:rgba(53,224,161,.4);color:var(--acc)}
+
+  .scroll{overflow:auto;max-height:420px;border-radius:10px;border:1px solid var(--line)}
+  pre.out{
+    margin:0;padding:13px;background:#06080a;border:1px solid var(--line);border-radius:9px;
+    font:12px/1.65 var(--mono);color:#9fb0c0;overflow:auto;white-space:pre-wrap;word-break:break-all;
+  }
+  .kv{display:grid;grid-template-columns:150px 1fr;gap:6px 12px;font:12px/1.6 var(--mono)}
+  .kv dt{color:var(--dim2)}
+  .kv dd{margin:0;color:#a8b4c2;word-break:break-all}
+
+  .tools{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px}
+  .tool{
+    display:flex;gap:11px;align-items:center;padding:12px;border-radius:10px;
+    background:#080b0e;border:1px solid var(--line);cursor:pointer;transition:.15s;
+  }
+  .tool:hover{border-color:rgba(53,224,161,.4);background:#0b1013}
+  .tool svg{width:20px;height:20px;color:var(--acc);flex:0 0 20px}
+  .tool b{display:block;font-size:12.5px;color:#dbe5ef;font-weight:600}
+  .tool span{display:block;font-size:11px;color:var(--dim2)}
+  footer{text-align:center;padding:26px 20px;font:11px/1 var(--mono);color:#2c343e;letter-spacing:.1em}
 </style>
 </head>
 <body>
-<div class="wrap">
 
-  <h1>zipkey</h1>
-  <div class="sub">zip password recovery · wordlist + brute force · runs in the tab</div>
-
-  <!-- archive -->
-  <div class="card">
-    <span class="lbl">archive</span>
-    <div id="drop">
-      <div>drop a <b>.zip</b> here, or click to pick</div>
-      <div id="zipname" class="hint">no archive loaded</div>
-    </div>
-    <input type="file" id="file" accept=".zip,application/zip" hidden>
-  </div>
-
-  <!-- mode -->
-  <div class="modes">
-    <div class="mode on" data-mode="wordlist">wordlist</div>
-    <div class="mode" data-mode="brute">brute force</div>
-  </div>
-
-  <!-- wordlist panel -->
-  <div class="card" id="panel-wordlist">
-    <span class="lbl">candidate list — one per line</span>
-    <textarea id="wordlist" placeholder="password&#10;123456&#10;letmein&#10;qwerty&#10;..."></textarea>
-    <div class="row">
-      <button class="tight" id="wlfile">load .txt</button>
-      <input type="file" id="wlf" accept=".txt,text/plain" hidden>
-      <span class="hint" id="wlinfo" style="flex:1;text-align:right"></span>
-    </div>
-    <div class="row">
-      <label class="chk" style="flex:1"><input type="checkbox" id="hybrid"> <div>append 0000–9999 to every word <span>×10000 candidates</span></div></label>
-    </div>
-  </div>
-
-  <!-- brute panel -->
-  <div class="card" id="panel-brute" style="display:none">
-    <span class="lbl">charset</span>
-    <div class="grid">
-      <label class="chk"><input type="checkbox" id="c-lower" checked> lowercase <span>a–z</span></label>
-      <label class="chk"><input type="checkbox" id="c-upper"> uppercase <span>A–Z</span></label>
-      <label class="chk"><input type="checkbox" id="c-digit" checked> digits <span>0–9</span></label>
-      <label class="chk"><input type="checkbox" id="c-sym"> symbols <span>!@#$…</span></label>
-    </div>
-    <div class="row">
-      <input type="text" id="c-custom" placeholder="extra chars (merged into charset)">
-    </div>
-    <div class="row">
-      <div>
-        <span class="lbl" style="margin:0 0 4px">min length</span>
-        <input type="number" id="minlen" value="1" min="1" max="32">
+<header>
+  <div class="wrap">
+    <div class="top">
+      <div class="mark">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="8" cy="8" r="4"/><path d="M11 11l9 9"/><path d="M17 17l2-2"/><path d="M14 14l2-2"/>
+        </svg>
       </div>
-      <div>
-        <span class="lbl" style="margin:0 0 4px">max length</span>
-        <input type="number" id="maxlen" value="6" min="1" max="32">
+      <div class="brand">
+        <h1>KEYSMITH</h1>
+        <p>ZIP Toolkit</p>
+      </div>
+      <div class="spacer"></div>
+      <div class="pill" id="threadPill">threads <b id="threadCount">—</b></div>
+    </div>
+    <nav id="nav">
+      <button class="tab on" data-p="crack">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="8" cy="8" r="4"/><path d="M11 11l9 9"/><path d="M17 17l2-2"/><path d="M14 14l2-2"/></svg>
+        Cracker
+      </button>
+      <button class="tab" data-p="inspect">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"/><path d="M16 16l4 4"/></svg>
+        Inspector
+      </button>
+      <button class="tab" data-p="forge">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l6-6"/><path d="M10 9l5-5 5 5-5 5z"/><path d="M13 4l6 6"/></svg>
+        Wordlist Forge
+      </button>
+      <button class="tab" data-p="mask">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="6" r="1.6"/><circle cx="12" cy="6" r="1.6"/><circle cx="18" cy="6" r="1.6"/><circle cx="6" cy="12" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="18" cy="12" r="1.6"/><circle cx="6" cy="18" r="1.6"/><circle cx="12" cy="18" r="1.6"/><circle cx="18" cy="18" r="1.6"/></svg>
+        Mask Lab
+      </button>
+      <button class="tab" data-p="export">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3"/><path d="M13 15h4"/></svg>
+        Hashcat Export
+      </button>
+      <button class="tab" data-p="rules">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h10M4 12h10M4 17h10"/><path d="M17 7l3 5-3 5"/></svg>
+        Rule Smith
+      </button>
+      <button class="tab" data-p="bench">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4 18a8 8 0 1 1 16 0"/><path d="M12 18l4-6"/></svg>
+        Bench
+      </button>
+    </nav>
+  </div>
+</header>
+
+<main>
+
+<!-- ============ CRACKER ============ -->
+<section class="panel on" id="p-crack">
+  <div class="grid2">
+    <div class="card">
+      <div class="cardhead"><h2>Target</h2><span class="badge" id="encBadge">no file</span></div>
+      <div class="drop" id="dropCrack">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/><path d="M12 11v6"/><path d="M9 14h6"/></svg>
+        <div style="flex:1;min-width:0">
+          <strong id="dropTitle">Drop a .zip</strong>
+          <span id="dropSub">or click to browse</span>
+        </div>
+        <input type="file" id="fileCrack" accept=".zip,.ZIP,application/zip,application/x-zip-compressed" hidden>
+      </div>
+      <div id="crackMeta" style="margin-top:12px"></div>
+      <label class="lbl" for="entrySel">Encrypted entry</label>
+      <select class="inp mono" id="entrySel" disabled><option>—</option></select>
+    </div>
+
+    <div class="card">
+      <div class="cardhead"><h2>Attack</h2></div>
+      <div class="seg" id="modeSeg">
+        <button data-mode="dict" class="on">Dictionary</button>
+        <button data-mode="mask">Mask</button>
+        <button data-mode="brute">Brute</button>
+      </div>
+
+      <div class="modebox on" id="mb-dict">
+        <label class="lbl" for="dictText">Wordlist</label>
+        <textarea class="inp mono" id="dictText" spellcheck="false" placeholder="one password per line"></textarea>
+        <div class="row wrap">
+          <button class="btn ghost" id="dictLoad">Load file</button>
+          <button class="btn ghost" id="dictCommon">Common list</button>
+          <span class="hint" id="dictCount">0 words</span>
+          <input type="file" id="dictFile" accept=".txt,.lst,.dict,text/plain" hidden>
+        </div>
+      </div>
+
+      <div class="modebox" id="mb-mask">
+        <label class="lbl" for="maskInput">Mask</label>
+        <input class="inp mono" id="maskInput" spellcheck="false" value="?u?l?l?l?l?d?d" />
+        <div class="hint" style="margin-top:6px">?l lower · ?u upper · ?d digit · ?s symbol · ?a all · ?1–?4 custom · ?x literal</div>
+        <div class="row wrap">
+          <input class="inp mono sm" style="width:150px" id="cs1" placeholder="custom ?1" />
+          <input class="inp mono sm" style="width:150px" id="cs2" placeholder="custom ?2" />
+        </div>
+        <div class="keyspace" id="maskKeyspace">—</div>
+      </div>
+
+      <div class="modebox" id="mb-brute">
+        <label class="lbl">Character set</label>
+        <div class="row wrap" id="charsetRow">
+          <label class="chk on"><input type="checkbox" data-cs="l" checked> a-z</label>
+          <label class="chk"><input type="checkbox" data-cs="u"> A-Z</label>
+          <label class="chk"><input type="checkbox" data-cs="d" checked> 0-9</label>
+          <label class="chk"><input type="checkbox" data-cs="s"> sym</label>
+          <label class="chk"><input type="checkbox" data-cs="x"> custom</label>
+        </div>
+        <div class="row wrap">
+          <input class="inp mono sm" style="width:180px" id="csX" placeholder="custom chars" />
+        </div>
+        <div class="row">
+          <label class="lbl" style="margin:0" for="bMin">Min</label>
+          <input class="inp sm" type="number" id="bMin" value="1" min="1" max="12">
+          <label class="lbl" style="margin:0 0 0 10px" for="bMax">Max</label>
+          <input class="inp sm" type="number" id="bMax" value="5" min="1" max="12">
+        </div>
+        <div class="keyspace" id="bruteKeyspace">—</div>
+      </div>
+
+      <div class="row">
+        <button class="btn" id="btnStart" disabled>Start</button>
+        <button class="btn danger" id="btnStop" disabled>Stop</button>
       </div>
     </div>
-    <div class="hint" style="margin-top:10px">speed note: legacy ZipCrypto ≈ 10⁴–10⁵ try/s, AES ≈ 10²–10³ try/s in a browser — the AES key check is real crypto work per attempt.</div>
   </div>
 
-  <!-- controls -->
   <div class="card">
-    <div class="btns">
-      <button id="start" disabled>start</button>
-      <button id="cancel">cancel</button>
-    </div>
-    <div class="barwrap"><div id="bar"></div></div>
+    <div class="cardhead"><h2>Run</h2><span class="badge" id="speedBadge">idle</span></div>
+    <div class="bar"><div class="fill" id="progFill"></div></div>
     <div class="stats">
-      <div class="stat"><div class="k">attempts</div><div class="v" id="st-attempts">0</div></div>
-      <div class="stat"><div class="k">speed</div><div class="v" id="st-speed">—</div></div>
-      <div class="stat"><div class="k">elapsed</div><div class="v" id="st-elapsed">0s</div></div>
-      <div class="stat"><div class="k">eta</div><div class="v" id="st-eta">—</div></div>
+      <div><span>Attempts</span><b id="stAtt">0</b></div>
+      <div><span>Keyspace</span><b id="stTot">—</b></div>
+      <div><span>Elapsed</span><b id="stTime">0s</b></div>
+      <div><span>ETA</span><b id="stEta">—</b></div>
     </div>
-    <div id="status"></div>
-    <div id="meta"></div>
-    <div id="result">
-      <div class="k">password recovered</div>
-      <div id="rpw"></div>
-      <button id="copy">copy</button>
+    <div class="result" id="result" hidden>
+      <div style="flex:1;min-width:160px">
+        <small>Password recovered</small>
+        <div class="pw" id="resPw">—</div>
+      </div>
+      <button class="btn ghost" id="resCopy">Copy</button>
+    </div>
+    <div class="log" id="log"></div>
+  </div>
+</section>
+
+<!-- ============ INSPECTOR ============ -->
+<section class="panel" id="p-inspect">
+  <div class="card">
+    <div class="cardhead"><h2>Archive Inspector</h2><span class="badge" id="inspBadge">no file</span></div>
+    <div class="drop" id="dropInsp">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="6"/><path d="M16 16l4 4"/></svg>
+      <div style="flex:1;min-width:0"><strong>Drop a .zip</strong><span>full central-directory dump</span></div>
+      <input type="file" id="fileInsp" accept=".zip,.ZIP" hidden>
+    </div>
+    <div id="inspSummary" style="margin-top:12px"></div>
+  </div>
+  <div class="card">
+    <div class="cardhead"><h2>Entries</h2><span class="badge" id="inspCount">0</span></div>
+    <div class="scroll"><table><thead><tr>
+      <th>Name</th><th>Method</th><th>Flags</th><th>Size</th><th>Packed</th><th>CRC</th><th>Enc</th>
+    </tr></thead><tbody id="inspBody"><tr><td colspan="7" style="color:#4c5765">no data</td></tr></tbody></table></div>
+  </div>
+</section>
+
+<!-- ============ FORGE ============ -->
+<section class="panel" id="p-forge">
+  <div class="grid2">
+    <div class="card">
+      <div class="cardhead"><h2>Wordlist Forge</h2></div>
+      <label class="lbl" for="forgeBase">Base words</label>
+      <textarea class="inp mono" id="forgeBase" spellcheck="false" placeholder="admin&#10;kai&#10;hunter"></textarea>
+      <label class="lbl">Mutations</label>
+      <div class="row wrap">
+        <label class="chk on"><input type="checkbox" data-m="leet" checked> leet</label>
+        <label class="chk on"><input type="checkbox" data-m="case" checked> case</label>
+        <label class="chk on"><input type="checkbox" data-m="cap" checked> Capitalize</label>
+        <label class="chk"><input type="checkbox" data-m="up"> UPPER</label>
+        <label class="chk on"><input type="checkbox" data-m="num" checked> +digits</label>
+        <label class="chk"><input type="checkbox" data-m="year"> +years</label>
+        <label class="chk"><input type="checkbox" data-m="sym"> +symbols</label>
+        <label class="chk"><input type="checkbox" data-m="rev"> reverse</label>
+        <label class="chk"><input type="checkbox" data-m="dup"> double</label>
+      </div>
+      <div class="row wrap">
+        <label class="lbl" style="margin:0" for="forgeNum">Digit range</label>
+        <input class="inp sm" type="number" id="forgeNum" value="4" min="1" max="6">
+        <label class="lbl" style="margin:0 0 0 10px" for="forgeSym">Symbols</label>
+        <input class="inp mono sm" style="width:110px" id="forgeSym" value="!@#$" />
+      </div>
+      <div class="row">
+        <button class="btn" id="forgeRun">Generate</button>
+        <button class="btn ghost" id="forgeSend">Send to Cracker</button>
+      </div>
+      <div class="keyspace" id="forgeInfo">—</div>
+    </div>
+    <div class="card">
+      <div class="cardhead"><h2>Output</h2><span class="badge" id="forgeBadge">0</span></div>
+      <textarea class="inp mono" id="forgeOut" spellcheck="false" style="min-height:300px" readonly></textarea>
+      <div class="row"><button class="btn ghost" id="forgeDl">Download .txt</button></div>
     </div>
   </div>
+</section>
 
-</div>
+<!-- ============ MASK LAB ============ -->
+<section class="panel" id="p-mask">
+  <div class="grid2">
+    <div class="card">
+      <div class="cardhead"><h2>Mask Lab</h2></div>
+      <label class="lbl" for="mlMask">Mask</label>
+      <input class="inp mono" id="mlMask" spellcheck="false" value="?u?l?l?l?l?d?d" />
+      <div class="row wrap" style="margin-top:10px">
+        <button class="btn ghost" data-tok="?l">?l</button>
+        <button class="btn ghost" data-tok="?u">?u</button>
+        <button class="btn ghost" data-tok="?d">?d</button>
+        <button class="btn ghost" data-tok="?s">?s</button>
+        <button class="btn ghost" data-tok="?a">?a</button>
+      </div>
+      <div class="keyspace" id="mlKeyspace">—</div>
+      <div class="row"><button class="btn" id="mlSend">Send to Cracker</button></div>
+    </div>
+    <div class="card">
+      <div class="cardhead"><h2>Breakdown</h2></div>
+      <div class="scroll" style="max-height:220px"><table><thead><tr><th>#</th><th>Set</th><th>Size</th><th>Chars</th></tr></thead><tbody id="mlBody"><tr><td colspan="4" style="color:#4c5765">—</td></tr></tbody></table></div>
+      <label class="lbl">Sample</label>
+      <pre class="out" id="mlSample" style="max-height:180px">—</pre>
+    </div>
+  </div>
+</section>
 
-<!-- ============ WORKER SOURCE (raw text, instantiated as Blob) ============ -->
-<script type="text/plain" id="worker-src">
-importScripts('https://unpkg.com/@zip.js/zip.js/dist/zip.min.js');
+<!-- ============ HASHCAT EXPORT ============ -->
+<section class="panel" id="p-export">
+  <div class="card">
+    <div class="cardhead"><h2>Hashcat Export</h2><span class="badge" id="expBadge">no file</span></div>
+    <div class="drop" id="dropExp">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M7 9l3 3-3 3"/><path d="M13 15h4"/></svg>
+      <div style="flex:1;min-width:0"><strong>Drop a .zip</strong><span>generate the exact hashcat command for this archive</span></div>
+      <input type="file" id="fileExp" accept=".zip,.ZIP" hidden>
+    </div>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <div class="cardhead"><h2>Detected</h2></div>
+      <div id="expInfo"><div class="hint">No archive loaded.</div></div>
+    </div>
+    <div class="card">
+      <div class="cardhead"><h2>Command</h2><button class="btn ghost" id="expCopy" style="margin-left:auto;padding:6px 10px">Copy</button></div>
+      <pre class="out" id="expCmd">—</pre>
+    </div>
+  </div>
+  <div class="card">
+    <div class="cardhead"><h2>Hash Material</h2></div>
+    <pre class="out" id="expMat">—</pre>
+    <div class="hint" style="margin-top:10px">
+      hashcat does not accept a raw .zip — extract the hash line with <b>zip2john</b> first, then feed it to the mode above.
+    </div>
+  </div>
+</section>
 
-let cancel = false;
-let attempts = 0;
-let startTime = 0;
-let lastReport = 0;
+<!-- ============ RULE SMITH ============ -->
+<section class="panel" id="p-rules">
+  <div class="grid2">
+    <div class="card">
+      <div class="cardhead"><h2>Rule Smith</h2></div>
+      <label class="lbl">Preset rule bundles</label>
+      <div class="row wrap">
+        <button class="btn ghost" data-rule="best64">best64</button>
+        <button class="btn ghost" data-rule="leetspeak">leetspeak</button>
+        <button class="btn ghost" data-rule="dive">dive</button>
+        <button class="btn ghost" data-rule="toggles">toggles</button>
+        <button class="btn ghost" data-rule="appends">appends</button>
+      </div>
+      <label class="lbl" for="ruleOut">Rules</label>
+      <textarea class="inp mono" id="ruleOut" spellcheck="false" style="min-height:220px"></textarea>
+      <div class="row">
+        <button class="btn ghost" id="ruleDl">Download .rule</button>
+        <span class="hint" id="ruleCount">0 rules</span>
+      </div>
+    </div>
+    <div class="card">
+      <div class="cardhead"><h2>Preview</h2></div>
+      <label class="lbl" for="ruleBase">Base word</label>
+      <input class="inp mono" id="ruleBase" value="password" />
+      <label class="lbl">Applied</label>
+      <pre class="out" id="rulePreview" style="max-height:340px">—</pre>
+    </div>
+  </div>
+</section>
 
-class NullWriter {
-  constructor() { this.size = 0; }
-  async init() {}
-  async writeUint8Array(arr) { this.size += arr.length; }
-  async getData() { return null; }
-}
+<!-- ============ BENCH ============ -->
+<section class="panel" id="p-bench">
+  <div class="grid2">
+    <div class="card">
+      <div class="cardhead"><h2>Engine Bench</h2><span class="badge" id="benchBadge">idle</span></div>
+      <p class="hint" style="margin:0 0 12px">Measures raw ZipCrypto key-derivation throughput across all available workers.</p>
+      <div class="row">
+        <button class="btn" id="benchRun">Run 3s bench</button>
+      </div>
+      <div class="stats" style="grid-template-columns:repeat(2,1fr)">
+        <div><span>Workers</span><b id="benchW">—</b></div>
+        <div><span>Total H/s</span><b id="benchTot">—</b></div>
+      </div>
+      <pre class="out" id="benchOut" style="margin-top:14px">—</pre>
+    </div>
+    <div class="card">
+      <div class="cardhead"><h2>Reference rates</h2></div>
+      <div class="scroll" style="max-height:340px">
+        <table><thead><tr><th>Target</th><th>GPU rate</th><th>Feasible</th></tr></thead><tbody>
+          <tr><td>ZIP ZipCrypto</td><td>~10 GH/s</td><td><span class="tag p">high</span></td></tr>
+          <tr><td>ZIP AES-256 (AE-2)</td><td>~4 MH/s</td><td><span class="tag e">low</span></td></tr>
+          <tr><td>7z AES-256</td><td>~1.5 MH/s</td><td><span class="tag e">low</span></td></tr>
+          <tr><td>RAR5</td><td>~10 kH/s</td><td><span class="tag e">very low</span></td></tr>
+        </tbody></table>
+      </div>
+      <div class="hint" style="margin-top:12px">Browser JS runs roughly 1/10 000th of a GPU. Use this toolkit for small dictionaries and short masks; push the long keyspaces to hashcat.</div>
+    </div>
+  </div>
+</section>
 
-self.onmessage = async (e) => {
-  const msg = e.data;
-  if (!msg) return;
-  if (msg.type === 'cancel') { cancel = true; return; }
-  if (msg.type === 'start') {
-    cancel = false;
-    attempts = 0;
-    startTime = performance.now();
-    lastReport = startTime;
-    try {
-      await run(msg);
-    } catch (err) {
-      self.postMessage({ type: 'error', message: String((err && err.message) || err) });
-    }
-  }
+</main>
+
+<footer>KEYSMITH · ZIP TOOLKIT · LOCAL-ONLY · NOTHING LEAVES THE BROWSER</footer>
+
+<script>
+"use strict";
+
+/* =========================================================
+   0. helpers
+   ========================================================= */
+const $  = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => Array.from(r.querySelectorAll(s));
+const fmt = n => n.toLocaleString("en-US");
+const bytes = n => { const u = ["B","KB","MB","GB"]; let i = 0; while (n >= 1024 && i < 3) { n /= 1024; i++; } return n.toFixed(i ? 1 : 0) + " " + u[i]; };
+const hex = n => "0x" + (n >>> 0).toString(16).padStart(8, "0");
+const secs = s => {
+  if (!isFinite(s) || s < 0) return "—";
+  if (s < 60) return Math.ceil(s) + "s";
+  if (s < 3600) return Math.floor(s / 60) + "m " + Math.floor(s % 60) + "s";
+  if (s < 86400) return Math.floor(s / 3600) + "h " + Math.floor((s % 3600) / 60) + "m";
+  return Math.floor(s / 86400) + "d " + Math.floor((s % 86400) / 3600) + "h";
 };
 
-function report(force) {
-  const now = performance.now();
-  if (!force && now - lastReport < 150) return;
-  lastReport = now;
-  const elapsed = (now - startTime) / 1000;
-  self.postMessage({ type: 'progress', attempts, elapsed, speed: attempts / Math.max(elapsed, 1e-6) });
-}
+const THREADS = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 4) - 1));
+$("#threadCount").textContent = THREADS;
 
-function found(pw) {
-  const elapsed = (performance.now() - startTime) / 1000;
-  self.postMessage({ type: 'found', password: pw, attempts, elapsed });
-}
-
-async function run(msg) {
-  const { file, mode, wordlist, charset, minLen, maxLen, hybrid } = msg;
-
-  const reader = new zip.ZipReader(new zip.BlobReader(file));
-  const entries = await reader.getEntries();
-  const files = entries.filter(en => !en.directory);
-  if (!files.length) throw new Error('archive contains no files');
-
-  const enc = files.filter(en => en.encrypted);
-  if (!enc.length) {
-    self.postMessage({ type: 'notencrypted' });
-    return;
-  }
-
-  // smallest encrypted entry = cheapest password check
-  enc.sort((a, b) => (a.uncompressedSize || 0) - (b.uncompressedSize || 0));
-  const target = enc[0];
-
-  let total = 0;
-  if (mode === 'wordlist') {
-    for (let i = 0; i < wordlist.length; i++) if (wordlist.charCodeAt(i) === 10) total++;
-    total += 1;
-    if (hybrid) total *= 10000;
-  } else {
-    const L = charset.length;
-    for (let len = minLen; len <= maxLen; len++) total += Math.pow(L, len);
-  }
-
-  self.postMessage({
-    type: 'meta',
-    targetName: target.filename,
-    targetSize: target.uncompressedSize || 0,
-    encryptedCount: enc.length,
-    totalCount: files.length,
-    total
-  });
-
-  const writer = new NullWriter();
-  async function tryPassword(pw) {
-    try {
-      writer.size = 0;
-      await target.getData(writer, { password: pw });
-      return true;
-    } catch (err) {
-      return false;
-    }
-  }
-
-  if (mode === 'wordlist') {
-    let pos = 0;
-    const n = wordlist.length;
-    while (pos <= n) {
-      if (cancel) { self.postMessage({ type: 'cancelled' }); return; }
-      let nl = wordlist.indexOf('\n', pos);
-      if (nl === -1) nl = n;
-      let w = wordlist.slice(pos, nl);
-      if (w.length && w.charCodeAt(w.length - 1) === 13) w = w.slice(0, -1);
-      pos = nl + 1;
-
-      if (w.length) {
-        attempts++;
-        if (await tryPassword(w)) { found(w); return; }
-        if (hybrid) {
-          for (let k = 0; k <= 9999; k++) {
-            if (cancel) { self.postMessage({ type: 'cancelled' }); return; }
-            const c = w + k;
-            attempts++;
-            if (await tryPassword(c)) { found(c); return; }
-            if ((k & 63) === 0) report(false);
-          }
-        }
-      }
-      if ((attempts & 7) === 0) report(false);
-      if (nl === n) break;
-    }
-    report(true);
-    self.postMessage({ type: 'exhausted', attempts });
-    return;
-  }
-
-  const L = charset.length;
-  for (let len = minLen; len <= maxLen; len++) {
-    const idx = new Array(len).fill(0);
-    const totalAtLen = Math.pow(L, len);
-    for (let done = 0; done < totalAtLen; done++) {
-      if (cancel) { self.postMessage({ type: 'cancelled' }); return; }
-      let pw = '';
-      for (let k = 0; k < len; k++) pw += charset[idx[k]];
-      attempts++;
-      if (await tryPassword(pw)) { found(pw); return; }
-      let p = len - 1;
-      while (p >= 0 && ++idx[p] === L) { idx[p] = 0; p--; }
-      if ((done & 127) === 0) report(false);
-    }
-    report(true);
-  }
-  self.postMessage({ type: 'exhausted', attempts });
-}
-</script>
-
-<!-- ============ MAIN ============ -->
-<script>
-(function () {
-  'use strict';
-
-  const $ = (id) => document.getElementById(id);
-
-  let zipFile = null;
-  let worker = null;
-  let running = false;
-  let mode = 'wordlist';
-  let totalCandidates = 0;
-  let bigWordlist = null; // {name, text} for large files kept out of the textarea
-
-  // ---------- archive ----------
-  const drop = $('drop'), fileInput = $('file');
-
-  drop.addEventListener('click', () => fileInput.click());
-  fileInput.addEventListener('change', () => {
-    if (fileInput.files[0]) setZip(fileInput.files[0]);
-  });
-
-  ['dragenter', 'dragover'].forEach(ev =>
-    drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('hover'); })
-  );
-  ['dragleave', 'drop'].forEach(ev =>
-    drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('hover'); })
-  );
-  drop.addEventListener('drop', e => {
-    const f = e.dataTransfer.files[0];
-    if (f) setZip(f);
-  });
-
-  function fmtBytes(n) {
-    if (n < 1024) return n + ' B';
-    if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
-    if (n < 1073741824) return (n / 1048576).toFixed(1) + ' MB';
-    return (n / 1073741824).toFixed(2) + ' GB';
-  }
-
-  function setZip(f) {
-    zipFile = f;
-    $('zipname').textContent = f.name + '  ·  ' + fmtBytes(f.size);
-    drop.classList.add('has');
-    $('meta').textContent = '';
-    refreshStart();
-  }
-
-  // ---------- mode ----------
-  document.querySelectorAll('.mode').forEach(el => {
-    el.addEventListener('click', () => {
-      if (running) return;
-      document.querySelectorAll('.mode').forEach(m => m.classList.remove('on'));
-      el.classList.add('on');
-      mode = el.dataset.mode;
-      $('panel-wordlist').style.display = mode === 'wordlist' ? '' : 'none';
-      $('panel-brute').style.display = mode === 'brute' ? '' : 'none';
-    });
-  });
-
-  // ---------- wordlist file ----------
-  $('wlfile').addEventListener('click', () => $('wlf').click());
-  $('wlf').addEventListener('change', () => {
-    const f = $('wlf').files[0];
-    if (!f) return;
-    const r = new FileReader();
-    r.onload = () => {
-      const text = r.result;
-      const lines = (text.match(/\n/g) || []).length + 1;
-      if (f.size > 8 * 1024 * 1024) {
-        bigWordlist = { name: f.name, text };
-        $('wordlist').value = '';
-        $('wlinfo').textContent = f.name + '  ·  ' + lines.toLocaleString() + ' lines  ·  ' + fmtBytes(f.size);
-      } else {
-        bigWordlist = null;
-        $('wordlist').value = text;
-        $('wlinfo').textContent = f.name + '  ·  ' + lines.toLocaleString() + ' lines';
-      }
-      refreshStart();
-    };
-    r.readAsText(f);
-  });
-
-  $('wordlist').addEventListener('input', () => {
-    bigWordlist = null;
-    $('wlinfo').textContent = '';
-    refreshStart();
-  });
-
-  $('hybrid').addEventListener('change', refreshStart);
-
-  // ---------- charset ----------
-  function buildCharset() {
-    let cs = '';
-    if ($('c-lower').checked) cs += 'abcdefghijklmnopqrstuvwxyz';
-    if ($('c-upper').checked) cs += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
-    if ($('c-digit').checked) cs += '0123456789';
-    if ($('c-sym').checked) cs += '!@#$%^&*()-_=+[]{};:,.<>?/';
-    const custom = $('c-custom').value;
-    for (const ch of custom) if (!cs.includes(ch)) cs += ch;
-    return cs;
-  }
-
-  // ---------- start gate ----------
-  function refreshStart() {
-    let ok = !!zipFile;
-    if (mode === 'wordlist') {
-      const wl = bigWordlist ? bigWordlist.text : $('wordlist').value;
-      if (!wl.trim()) ok = false;
-    } else {
-      if (!buildCharset().length) ok = false;
-      const mn = parseInt($('minlen').value, 10), mx = parseInt($('maxlen').value, 10);
-      if (!(mn >= 1) || !(mx >= mn)) ok = false;
-    }
-    $('start').disabled = !ok || running;
-  }
-  ['change', 'input'].forEach(ev => {
-    ['c-lower', 'c-upper', 'c-digit', 'c-sym', 'c-custom', 'minlen', 'maxlen'].forEach(id => {
-      $(id).addEventListener(ev, refreshStart);
-    });
-  });
-
-  // ---------- stats ----------
-  function fmtDur(sec) {
-    if (!isFinite(sec) || sec < 0) return '—';
-    if (sec < 1) return '<1s';
-    if (sec < 60) return Math.round(sec) + 's';
-    if (sec < 3600) return Math.floor(sec / 60) + 'm ' + Math.round(sec % 60) + 's';
-    if (sec < 86400) return Math.floor(sec / 3600) + 'h ' + Math.round((sec % 3600) / 60) + 'm';
-    return Math.floor(sec / 86400) + 'd ' + Math.round((sec % 86400) / 3600) + 'h';
-  }
-
-  function setStatus(text, cls) {
-    const s = $('status');
-    s.textContent = text || '';
-    s.className = cls || '';
-  }
-
-  function resetStats() {
-    $('st-attempts').textContent = '0';
-    $('st-speed').textContent = '—';
-    $('st-elapsed').textContent = '0s';
-    $('st-eta').textContent = '—';
-    $('bar').style.width = '0%';
-  }
-
-  // ---------- worker lifecycle ----------
-  function createWorker() {
-    const src = $('worker-src').textContent;
-    const blob = new Blob([src], { type: 'text/javascript' });
-    const url = URL.createObjectURL(blob);
-    const w = new Worker(url);
-    URL.revokeObjectURL(url);
-    return w;
-  }
-
-  function stopWorker() {
-    if (worker) {
-      try { worker.terminate(); } catch (e) {}
-      worker = null;
-    }
-    running = false;
-    $('start').style.display = '';
-    $('cancel').style.display = 'none';
-    refreshStart();
-  }
-
-  $('start').addEventListener('click', () => {
-    if (!zipFile || running) return;
-
-    resetStats();
-    $('result').style.display = 'none';
-    $('meta').textContent = '';
-    setStatus('starting…');
-
-    const cfg = {
-      type: 'start',
-      file: zipFile,
-      mode,
-      hybrid: mode === 'wordlist' ? $('hybrid').checked : false
-    };
-
-    if (mode === 'wordlist') {
-      cfg.wordlist = bigWordlist ? bigWordlist.text : $('wordlist').value;
-    } else {
-      cfg.charset = buildCharset();
-      cfg.minLen = parseInt($('minlen').value, 10);
-      cfg.maxLen = parseInt($('maxlen').value, 10);
-    }
-
-    worker = createWorker();
-    worker.onmessage = onWorkerMessage;
-    worker.onerror = (e) => {
-      setStatus('worker error: ' + (e.message || 'failed to load'), 'bad');
-      stopWorker();
-    };
-
-    running = true;
-    totalCandidates = 0;
-    $('start').disabled = true;
-    $('start').style.display = 'none';
-    $('cancel').style.display = '';
-
-    worker.postMessage(cfg);
-  });
-
-  $('cancel').addEventListener('click', () => {
-    if (worker) worker.postMessage({ type: 'cancel' });
-    setStatus('cancelling…');
-  });
-
-  // ---------- worker messages ----------
-  function onWorkerMessage(e) {
-    const m = e.data;
-    switch (m.type) {
-      case 'meta': {
-        totalCandidates = m.total || 0;
-        const kb = fmtBytes(m.targetSize);
-        $('meta').textContent =
-          'attacking "' + m.targetName + '" (' + kb + ') · ' +
-          m.encryptedCount + ' of ' + m.totalCount + ' entries encrypted · ' +
-          totalCandidates.toLocaleString() + ' candidates queued';
-        setStatus('cracking…');
-        break;
-      }
-      case 'progress': {
-        $('st-attempts').textContent = m.attempts.toLocaleString();
-        $('st-speed').textContent = Math.round(m.speed).toLocaleString() + '/s';
-        $('st-elapsed').textContent = fmtDur(m.elapsed);
-        if (totalCandidates > 0) {
-          const pct = Math.min(100, (m.attempts / totalCandidates) * 100);
-          $('bar').style.width = pct.toFixed(2) + '%';
-          const remain = totalCandidates - m.attempts;
-          $('st-eta').textContent = m.speed > 0 ? fmtDur(remain / m.speed) : '—';
-        } else {
-          $('st-eta').textContent = '—';
-        }
-        break;
-      }
-      case 'found': {
-        $('bar').style.width = '100%';
-        $('st-attempts').textContent = m.attempts.toLocaleString();
-        $('st-elapsed').textContent = fmtDur(m.elapsed);
-        $('rpw').textContent = m.password;
-        $('result').style.display = '';
-        setStatus('hit after ' + m.attempts.toLocaleString() + ' attempts in ' + fmtDur(m.elapsed), 'ok');
-        stopWorker();
-        break;
-      }
-      case 'exhausted': {
-        $('bar').style.width = '100%';
-        setStatus('exhausted — ' + m.attempts.toLocaleString() + ' candidates tried, no match', 'bad');
-        stopWorker();
-        break;
-      }
-      case 'cancelled': {
-        setStatus('cancelled at ' + (e.data.attempts || 0) + ' attempts', 'warn');
-        stopWorker();
-        break;
-      }
-      case 'notencrypted': {
-        setStatus('archive is not encrypted — no password needed', 'warn');
-        stopWorker();
-        break;
-      }
-      case 'error': {
-        setStatus('error: ' + m.message, 'bad');
-        stopWorker();
-        break;
-      }
-    }
-  }
-
-  // ---------- copy ----------
-  $('copy').addEventListener('click', () => {
-    const pw = $('rpw').textContent;
-    if (!pw) return;
-    navigator.clipboard.writeText(pw).then(() => {
-      const b = $('copy');
-      b.textContent = 'copied';
-      setTimeout(() => { b.textContent = 'copy'; }, 1200);
-    }).catch(() => {});
-  });
+/* =========================================================
+   1. crc32 + inflate
+   ========================================================= */
+const CRCT = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); t[n] = c >>> 0; }
+  return t;
 })();
+
+function crc32(u8) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < u8.length; i++) c = (c >>> 8) ^ CRCT[(c ^ u8[i]) & 0xFF];
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+
+async function inflateRaw(u8) {
+  const ds = new DecompressionStream("deflate-raw");
+  const stream = new Blob([u8]).stream().pipeThrough(ds);
+  return new Uint8Array(await new Response(stream).arrayBuffer());
+}
+
+/* =========================================================
+   2. ZIP parser
+   ========================================================= */
+function parseZip(buffer) {
+  const dv = new DataView(buffer), u8 = new Uint8Array(buffer), len = buffer.byteLength;
+  if (len < 22) throw new Error("File too small to be a ZIP.");
+
+  let eocd = -1;
+  const lim = Math.max(0, len - 22 - 65535);
+  for (let i = len - 22; i >= lim; i--) {
+    if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; }
+  }
+  if (eocd < 0) throw new Error("EOCD signature not found — not a ZIP, or the archive is truncated.");
+
+  const count = dv.getUint16(eocd + 10, true);
+  const cdOff = dv.getUint32(eocd + 16, true);
+  if (cdOff >= len) throw new Error("Central directory offset out of range.");
+
+  const td = new TextDecoder("utf-8");
+  const entries = [];
+  let p = cdOff;
+
+  for (let i = 0; i < count; i++) {
+    if (p + 46 > len || dv.getUint32(p, true) !== 0x02014b50) break;
+
+    const flags   = dv.getUint16(p + 8, true);
+    const method  = dv.getUint16(p + 10, true);
+    const dostime = dv.getUint16(p + 12, true);
+    const dosdate = dv.getUint16(p + 14, true);
+    const crc     = dv.getUint32(p + 16, true);
+    const csize   = dv.getUint32(p + 20, true);
+    const usize   = dv.getUint32(p + 24, true);
+    const nlen    = dv.getUint16(p + 28, true);
+    const elen    = dv.getUint16(p + 30, true);
+    const clen    = dv.getUint16(p + 32, true);
+    const lho     = dv.getUint32(p + 42, true);
+
+    const name = td.decode(u8.subarray(p + 46, p + 46 + nlen));
+
+    let aes = null;
+    let e = p + 46 + nlen;
+    const eEnd = e + elen;
+    while (e + 4 <= eEnd) {
+      const id = dv.getUint16(e, true), sz = dv.getUint16(e + 2, true);
+      if (id === 0x9901 && sz >= 7) {
+        aes = {
+          version: dv.getUint16(e + 4, true),
+          vendor: String.fromCharCode(dv.getUint8(e + 6), dv.getUint8(e + 7)),
+          strength: dv.getUint8(e + 8),
+          realMethod: dv.getUint16(e + 9, true)
+        };
+      }
+      e += 4 + sz;
+    }
+
+    const entry = {
+      name, flags, method, dostime, dosdate, crc, csize, usize, lho, aes,
+      encrypted: !!(flags & 1),
+      dataOffset: null
+    };
+
+    if (lho + 30 <= len && dv.getUint32(lho, true) === 0x04034b50) {
+      const lnlen = dv.getUint16(lho + 26, true);
+      const lelen = dv.getUint16(lho + 28, true);
+      entry.dataOffset = lho + 30 + lnlen + lelen;
+    }
+
+    entries.push(entry);
+    p = eEnd + clen;
+  }
+  return entries;
+}
+
+function aesSaltSize(strength) { return strength === 3 ? 16 : strength === 2 ? 12 : 8; }
+function aesKeyLen(strength) { return strength === 3 ? 32 : strength === 2 ? 24 : 16; }
+function encKind(e) {
+  if (!e.encrypted) return "none";
+  if (e.aes) return "aes";
+  return "zipcrypto";
+}
+
+/* =========================================================
+   3. ZipCrypto primitives (main thread — for verification)
+   ========================================================= */
+function zipcryptoDecryptAll(pw, cipher) {
+  let k0 = 0x12345678, k1 = 0x23456789, k2 = 0x34567890;
+  const T = CRCT;
+  const upd = (b) => {
+    k0 = (k0 >>> 8) ^ T[(k0 ^ b) & 0xff];
+    k1 = (Math.imul((k1 + (k0 & 0xff)) >>> 0, 134775813) + 1) >>> 0;
+    k2 = (k2 >>> 8) ^ T[(k2 ^ (k1 >>> 24)) & 0xff];
+  };
+  for (let i = 0; i < pw.length; i++) upd(pw.charCodeAt(i) & 0xff);
+  const out = new Uint8Array(cipher.length);
+  for (let i = 0; i < cipher.length; i++) {
+    const t = (k2 | 2) & 0xffff;
+    const ks = ((t * (t ^ 1)) >>> 8) & 0xff;
+    const p = cipher[i] ^ ks;
+    out[i] = p;
+    upd(p);
+  }
+  return out;
+}
+
+/* =========================================================
+   4. Web Worker source — ZipCrypto engine
+   ========================================================= */
+const ZIPCRYPTO_WORKER = `
+"use strict";
+const T = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); t[n] = c >>> 0; }
+  return t;
+})();
+
+let HDR = null, CHK = 0;
+
+function passCodes(codes) {
+  const h = HDR, t = T;
+  let k0 = 0x12345678, k1 = 0x23456789, k2 = 0x34567890, b;
+  for (let i = 0, n = codes.length; i < n; i++) {
+    b = codes[i];
+    k0 = (k0 >>> 8) ^ t[(k0 ^ b) & 0xff];
+    k1 = (Math.imul((k1 + (k0 & 0xff)) >>> 0, 134775813) + 1) >>> 0;
+    k2 = (k2 >>> 8) ^ t[(k2 ^ (k1 >>> 24)) & 0xff];
+  }
+  let p = 0;
+  for (let i = 0; i < 12; i++) {
+    const x = (k2 | 2) & 0xffff;
+    p = h[i] ^ (((x * (x ^ 1)) >>> 8) & 0xff);
+    if (i === 11) break;
+    k0 = (k0 >>> 8) ^ t[(k0 ^ p) & 0xff];
+    k1 = (Math.imul((k1 + (k0 & 0xff)) >>> 0, 134775813) + 1) >>> 0;
+    k2 = (k2 >>> 8) ^ t[(k2 ^ (k1 >>> 24)) & 0xff];
+  }
+  return p === CHK;
+}
+
+function passStr(s) {
+  const h = HDR, t = T;
+  let k0 = 0x12345678, k1 = 0x23456789, k2 = 0x34567890, b;
+  for (let i = 0, n = s.length; i < n; i++) {
+    b = s.charCodeAt(i) & 0xff;
+    k0 = (k0 >>> 8) ^ t[(k0 ^ b) & 0xff];
+    k1 = (Math.imul((k1 + (k0 & 0xff)) >>> 0, 134775813) + 1) >>> 0;
+    k2 = (k2 >>> 8) ^ t[(k2 ^ (k1 >>> 24)) & 0xff];
+  }
+  let p = 0;
+  for (let i = 0; i < 12; i++) {
+    const x = (k2 | 2) & 0xffff;
+    p = h[i] ^ (((x * (x ^ 1)) >>> 8) & 0xff);
+    if (i === 11) break;
+    k0 = (k0 >>> 8) ^ t[(k0 ^ p) & 0xff];
+    k1 = (Math.imul((k1 + (k0 & 0xff)) >>> 0, 134775813) + 1) >>> 0;
+    k2 = (k2 >>> 8) ^ t[(k2 ^ (k1 >>> 24)) & 0xff];
+  }
+  return p === CHK;
+}
+
+self.onmessage = (e) => {
+  const m = e.data;
+
+  if (m.cmd === "init") {
+    HDR = new Uint8Array(m.header);
+    CHK = m.check;
+    self.postMessage({ ok: 1 });
+    return;
+  }
+
+  if (m.cmd === "words") {
+    const list = m.words;
+    let n = 0, t0 = performance.now();
+    for (let i = 0; i < list.length; i++) {
+      if (passStr(list[i])) { self.postMessage({ found: list[i], count: n }); return; }
+      n++;
+      if ((n & 0x3fff) === 0 && performance.now() - t0 > 70) {
+        self.postMessage({ progress: n }); n = 0; t0 = performance.now();
+      }
+    }
+    self.postMessage({ done: 1, count: n });
+    return;
+  }
+
+  if (m.cmd === "mask") {
+    const sets = m.sets.map(s => { const a = new Uint16Array(s.length); for (let i = 0; i < s.length; i++) a[i] = s.charCodeAt(i) & 0xff; return a; });
+    const n = sets.length;
+    const digits = new Array(n).fill(0);
+    const codes = new Array(n).fill(0);
+
+    let x = m.start;
+    for (let i = n - 1; i >= 0; i--) { const b = sets[i].length; digits[i] = x % b; x = Math.floor(x / b); }
+    for (let i = 0; i < n; i++) codes[i] = sets[i][digits[i]];
+
+    let c = m.start, cnt = 0, t0 = performance.now();
+    while (c < m.end) {
+      if (passCodes(codes)) {
+        self.postMessage({ found: String.fromCharCode.apply(null, codes), count: cnt });
+        return;
+      }
+      cnt++; c++;
+      let i = n - 1, carry = true;
+      while (i >= 0) {
+        digits[i]++;
+        if (digits[i] < sets[i].length) { codes[i] = sets[i][digits[i]]; carry = false; break; }
+        digits[i] = 0; codes[i] = sets[i][0]; i--;
+      }
+      if (carry) break;
+      if ((cnt & 0x1fff) === 0 && performance.now() - t0 > 70) {
+        self.postMessage({ progress: cnt }); cnt = 0; t0 = performance.now();
+      }
+    }
+    self.postMessage({ done: 1, count: cnt });
+    return;
+  }
+
+  if (m.cmd === "bench") {
+    let n = 0;
+    const t0 = performance.now();
+    const codes = new Array(8);
+    for (let i = 0; i < 8; i++) codes[i] = 97 + (i % 26);
+    while (performance.now() - t0 < m.ms) {
+      for (let i = 0; i < 20000; i++) { codes[7] = 97 + (i % 26); passCodes(codes); }
+      n += 20000;
+    }
+    self.postMessage({ done: 1, count: n });
+  }
+};
+`;
+
+/* =========================================================
+   5. Web Worker source — AES (WinZip AE-x) engine
+   ========================================================= */
+const AES_WORKER = `
+"use strict";
+let SALT = null, PV = null, KLEN = 0;
+
+self.onmessage = async (e) => {
+  const m = e.data;
+
+  if (m.cmd === "init") {
+    SALT = new Uint8Array(m.salt);
+    PV = new Uint8Array(m.pv);
+    KLEN = m.klen;
+    self.postMessage({ ok: 1 });
+    return;
+  }
+
+  if (m.cmd === "words") {
+    const enc = new TextEncoder();
+    const bits = (2 * KLEN + 2) * 8;
+    const list = m.words;
+    let n = 0, t0 = performance.now();
+
+    for (let i = 0; i < list.length; i++) {
+      const w = list[i];
+      const key = await crypto.subtle.importKey("raw", enc.encode(w), "PBKDF2", false, ["deriveBits"]);
+      const d = new Uint8Array(await crypto.subtle.deriveBits(
+        { name: "PBKDF2", salt: SALT, iterations: 1000, hash: "SHA-1" }, key, bits
+      ));
+      n++;
+      if (d[2 * KLEN] === PV[0] && d[2 * KLEN + 1] === PV[1]) {
+        self.postMessage({ found: w, count: n });
+        return;
+      }
+      if ((n & 7) === 0 && performance.now() - t0 > 120) {
+        self.postMessage({ progress: n }); n = 0; t0 = performance.now();
+      }
+    }
+    self.postMessage({ done: 1, count: n });
+  }
+};
+`;
+
+/* =========================================================
+   6. worker pool
+   ========================================================= */
+function createPool(src, size, handlers) {
+  const url = URL.createObjectURL(new Blob([src], { type: "text/javascript" }));
+  const workers = [];
+  const st = { queue: [], active: 0, stopped: false, ran: 0 };
+
+  function pump() {
+    if (st.stopped) return;
+    for (;;) {
+      const free = workers.find(w => !w._busy);
+      if (!free || st.queue.length === 0) break;
+      free._busy = true;
+      st.active++;
+      st.ran++;
+      free.postMessage(st.queue.shift());
+    }
+    if (st.active === 0 && st.queue.length === 0 && st.ran > 0 && handlers.onDone) {
+      const f = handlers.onDone; handlers.onDone = null; f();
+    }
+  }
+
+  for (let i = 0; i < size; i++) {
+    const w = new Worker(url);
+    w._busy = false;
+    w.onmessage = (e) => {
+      const d = e.data;
+      if (d.ok !== undefined) return;
+      if (d.progress !== undefined) { handlers.onProgress && handlers.onProgress(d.progress); return; }
+      if (d.found !== undefined) {
+        if (d.count) handlers.onProgress && handlers.onProgress(d.count);
+        handlers.onFound && handlers.onFound(d.found);
+        return;
+      }
+      if (d.count) handlers.onProgress && handlers.onProgress(d.count);
+      w._busy = false;
+      st.active--;
+      pump();
+    };
+    w.onerror = (err) => {
+      console.error("worker error", err.message);
+      w._busy = false; st.active--;
+      pump();
+    };
+    workers.push(w);
+  }
+
+  return {
+    workers,
+    broadcast(msg) { workers.forEach(w => w.postMessage(msg)); },
+    submit(job) { st.queue.push(job); pump(); },
+    start() { pump(); },
+    stop() {
+      st.stopped = true;
+      workers.forEach(w => w.terminate());
+      setTimeout(() => URL.revokeObjectURL(url), 100);
+    }
+  };
+}
+
+/* =========================================================
+   7. mask sets
+   ========================================================= */
+const MASK_SETS = {
+  l: "abcdefghijklmnopqrstuvwxyz",
+  u: "ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+  d: "0123456789",
+  s: " !\"#$%&'()*+,-./:;<=>?@[\\]^_`{|}~",
+  h: "0123456789abcdef",
+  H: "0123456789ABCDEF",
+  a: (() => { let s = ""; for (let i = 32; i < 127; i++) s += String.fromCharCode(i); return s; })()
+};
+
+function parseMask(mask, custom) {
+  const sets = [];
+  for (let i = 0; i < mask.length; i++) {
+    const c = mask[i];
+    if (c === "?" && i + 1 < mask.length) {
+      const t = mask[++i];
+      if (MASK_SETS[t]) sets.push(MASK_SETS[t]);
+      else if (custom[t]) sets.push(custom[t]);
+      else if (t === "?") sets.push("?");
+      else sets.push(t);
+    } else {
+      sets.push(c);
+    }
+  }
+  return sets;
+}
+
+function keyspaceOf(sets) {
+  let n = 1;
+  for (const s of sets) { n *= s.length; if (!isFinite(n) || n > Number.MAX_SAFE_INTEGER) return Infinity; }
+  return n;
+}
+
+/* =========================================================
+   8. global cracker state
+   ========================================================= */
+const S = {
+  file: null,
+  buffer: null,
+  entries: [],
+  target: null,
+  running: false,
+  pool: null,
+  attempts: 0,
+  total: 0,
+  t0: 0,
+  timer: null,
+  verifyQueue: [],
+  verifying: false,
+  found: null,
+  pending: 0
+};
+
+/* ---------- log ---------- */
+function log(msg, cls = "") {
+  const box = $("#log");
+  const d = document.createElement("div");
+  d.className = "l " + cls;
+  const t = new Date();
+  const stamp = String(t.getHours()).padStart(2, "0") + ":" + String(t.getMinutes()).padStart(2, "0") + ":" + String(t.getSeconds()).padStart(2, "0");
+  d.textContent = "[" + stamp + "] " + msg;
+  box.appendChild(d);
+  box.scrollTop = box.scrollHeight;
+}
+
+/* =========================================================
+   9. archive loading
+   ========================================================= */
+async function loadArchive(file, opts) {
+  const buf = await file.arrayBuffer();
+  const entries = parseZip(buf);
+  return { buf, entries, file };
+}
+
+function describeEnc(entries) {
+  const enc = entries.filter(e => e.encrypted);
+  if (!enc.length) return { label: "unencrypted", cls: "ok", enc };
+  if (enc.some(e => e.aes)) return { label: "AES (AE-x)", cls: "live", enc };
+  return { label: "ZipCrypto", cls: "warn", enc };
+}
+
+/* ---------- crack panel file wiring ---------- */
+function wireDrop(dropEl, inputEl, onFile) {
+  dropEl.addEventListener("click", () => inputEl.click());
+  dropEl.addEventListener("dragover", e => { e.preventDefault(); dropEl.classList.add("over"); });
+  dropEl.addEventListener("dragleave", () => dropEl.classList.remove("over"));
+  dropEl.addEventListener("drop", e => {
+    e.preventDefault();
+    dropEl.classList.remove("over");
+    const f = e.dataTransfer.files[0];
+    if (f) onFile(f);
+  });
+  inputEl.addEventListener("change", () => {
+    if (inputEl.files[0]) onFile(inputEl.files[0]);
+    inputEl.value = "";
+  });
+}
+
+wireDrop($("#dropCrack"), $("#fileCrack"), async (f) => {
+  try {
+    const a = await loadArchive(f);
+    S.file = a.file; S.buffer = a.buf; S.entries = a.entries; S.target = null; S.found = null;
+
+    $("#dropTitle").textContent = f.name;
+    $("#dropSub").innerHTML = '<span class="fname">' + bytes(f.size) + " · " + a.entries.length + " entries</span>";
+
+    const d = describeEnc(a.entries);
+    const badge = $("#encBadge");
+    badge.textContent = d.label;
+    badge.className = "badge " + d.cls;
+
+    $("#crackMeta").innerHTML =
+      '<dl class="kv">' +
+      "<dt>archive</dt><dd>" + f.name.replace(/[<>&]/g, "") + "</dd>" +
+      "<dt>size</dt><dd>" + bytes(f.size) + "</dd>" +
+      "<dt>entries</dt><dd>" + a.entries.length + " (" + d.enc.length + " encrypted)</dd>" +
+      "<dt>format</dt><dd>" + (d.enc.some(e => e.aes) ? "WinZip AES" : d.enc.length ? "PKZIP traditional" : "stored") + "</dd>" +
+      "</dl>";
+
+    const sel = $("#entrySel");
+    sel.innerHTML = "";
+    if (!d.enc.length) {
+      sel.innerHTML = '<option value="-1">no encrypted entries</option>';
+      sel.disabled = true;
+      $("#btnStart").disabled = true;
+      log("Archive has no encrypted entries.", "y");
+      return;
+    }
+    d.enc.forEach((e, i) => {
+      const o = document.createElement("option");
+      o.value = String(a.entries.indexOf(e));
+      o.textContent = e.name + "  [" + (e.aes ? "AES-" + aesKeyLen(e.aes.strength) * 8 : "ZipCrypto") + "]";
+      sel.appendChild(o);
+    });
+    sel.disabled = false;
+    sel.selectedIndex = 0;
+    selectTarget(Number(sel.value));
+    $("#btnStart").disabled = false;
+    log("Loaded " + f.name + " · " + d.enc.length + " encrypted entr" + (d.enc.length === 1 ? "y" : "ies") + ".", "g");
+  } catch (err) {
+    log("Load failed: " + err.message, "r");
+    $("#encBadge").textContent = "error";
+    $("#encBadge").className = "badge bad";
+  }
+});
+
+$("#entrySel").addEventListener("change", e => {
+  const i = Number(e.target.value);
+  if (i >= 0) selectTarget(i);
+});
+
+function selectTarget(idx) {
+  S.target = S.entries[idx];
+  S.found = null;
+  $("#result").hidden = true;
+  if (!S.target) return;
+  if (!S.target.dataOffset) { log("Local header for this entry could not be resolved.", "r"); return; }
+  const kind = encKind(S.target);
+  log("Target → " + S.target.name + " · " + (kind === "aes"
+    ? "AES-" + aesKeyLen(S.target.aes.strength) * 8 + " / PBKDF2-SHA1 ×1000"
+    : "ZipCrypto (12-byte header check)"), "b");
+  updateKeyspace();
+}
+
+/* =========================================================
+   10. mode switching
+   ========================================================= */
+let MODE = "dict";
+$$("#modeSeg button").forEach(b => {
+  b.addEventListener("click", () => {
+    $$("#modeSeg button").forEach(x => x.classList.remove("on"));
+    b.classList.add("on");
+    MODE = b.dataset.mode;
+    $$(".modebox").forEach(m => m.classList.remove("on"));
+    $("#mb-" + MODE).classList.add("on");
+    updateKeyspace();
+  });
+});
+
+/* ---------- dictionary ---------- */
+function dictWords() {
+  return $("#dictText").value.split(/\r?\n/).filter(w => w.length > 0);
+}
+function refreshDictCount() {
+  const n = dictWords().length;
+  $("#dictCount").textContent = fmt(n) + " word" + (n === 1 ? "" : "s");
+  updateKeyspace();
+}
+$("#dictText").addEventListener("input", refreshDictCount);
+$("#dictLoad").addEventListener("click", () => $("#dictFile").click());
+$("#dictFile").addEventListener("change", async (e) => {
+  const f = e.target.files[0];
+  if (!f) return;
+  const txt = await f.text();
+  $("#dictText").value = txt;
+  refreshDictCount();
+  log("Loaded wordlist " + f.name + " (" + fmt(dictWords().length) + " words).", "g");
+  e.target.value = "";
+});
+$("#dictCommon").addEventListener("click", () => {
+  $("#dictText").value = COMMON_PASSWORDS.join("\n");
+  refreshDictCount();
+  log("Loaded built-in common list (" + COMMON_PASSWORDS.length + ").", "g");
+});
+
+/* ---------- mask ---------- */
+function currentMaskSets() {
+  return parseMask($("#maskInput").value, { 1: $("#cs1").value, 2: $("#cs2").value, 3: "", 4: "" });
+}
+["#maskInput", "#cs1", "#cs2"].forEach(sel => $(sel).addEventListener("input", updateKeyspace));
+
+/* ---------- brute ---------- */
+function bruteCharset() {
+  let s = "";
+  $$("#charsetRow input:checked").forEach(c => {
+    const k = c.dataset.cs;
+    if (k === "l") s += MASK_SETS.l;
+    if (k === "u") s += MASK_SETS.u;
+    if (k === "d") s += MASK_SETS.d;
+    if (k === "s") s += MASK_SETS.s;
+    if (k === "x") s += $("#csX").value;
+  });
+  return s;
+}
+$$("#charsetRow input").forEach(c => {
+  c.addEventListener("change", () => {
+    c.parentElement.classList.toggle("on", c.checked);
+    updateKeyspace();
+  });
+});
+["#csX", "#bMin", "#bMax"].forEach(sel => $(sel).addEventListener("input", updateKeyspace));
+
+/* ---------- keyspace readout ---------- */
+function updateKeyspace() {
+  if (MODE === "dict") {
+    const n = dictWords().length;
+    S.total = n;
+    $("#maskKeyspace").textContent = "—";
+    $("#bruteKeyspace").textContent = "—";
+  } else if (MODE === "mask") {
+    const sets = currentMaskSets();
+    const n = keyspaceOf(sets);
+    S.total = n;
+    $("#maskKeyspace").innerHTML =
+      "keyspace <b>" + (isFinite(n) ? fmt(n) : "∞") + "</b> · length " + sets.length +
+      " · " + (isFinite(n) ? estTime(n) : "—");
+  } else {
+    const cs = bruteCharset();
+    const min = Math.max(1, +$("#bMin").value || 1);
+    const max = Math.max(min, +$("#bMax").value || min);
+    let n = 0;
+    for (let L = min; L <= max; L++) n += Math.pow(cs.length, L);
+    S.total = n;
+    $("#bruteKeyspace").innerHTML =
+      "charset <b>" + cs.length + "</b> chars · len " + min + "–" + max +
+      " · keyspace <b>" + fmt(n) + "</b> · " + estTime(n);
+  }
+}
+
+function estTime(n) {
+  const rate = MODE === "dict" || !S.target ? 200000 : 200000;
+  const k = encKind(S.target || {});
+  const r = k === "aes" ? 800 * THREADS : 200000 * THREADS;
+  if (!isFinite(n)) return "—";
+  return "≈ " + secs(n / r) + " at " + fmt(r) + " H/s";
+}
+
+/* =========================================================
+   11. cracking
+   ========================================================= */
+function buildJobs() {
+  const jobs = [];
+  if (MODE === "dict") {
+    const words = dictWords();
+    const CH = 4000;
+    for (let i = 0; i < words.length; i += CH) jobs.push({ cmd: "words", words: words.slice(i, i + CH) });
+  } else if (MODE === "mask") {
+    const sets = currentMaskSets();
+    const total = keyspaceOf(sets);
+    if (!isFinite(total)) { log("Keyspace too large — narrow the mask.", "r"); return null; }
+    const CH = 250000;
+    for (let s = 0; s < total; s += CH) jobs.push({ cmd: "mask", sets, start: s, end: Math.min(total, s + CH) });
+  } else {
+    const cs = bruteCharset();
+    if (!cs.length) { log("Select at least one character set.", "r"); return null; }
+    const min = Math.max(1, +$("#bMin").value || 1);
+    const max = Math.max(min, +$("#bMax").value || min);
+    for (let L = min; L <= max; L++) {
+      const sets = new Array(L).fill(cs);
+      const total = Math.pow(cs.length, L);
+      const CH = 250000;
+      for (let s = 0; s < total; s += CH) jobs.push({ cmd: "mask", sets, start: s, end: Math.min(total, s + CH) });
+    }
+  }
+  return jobs;
+}
+
+async function startCrack() {
+  if (S.running || !S.target) return;
+  const entry = S.target;
+
+  if (!entry.encrypted) { log("Entry is not encrypted.", "y"); return; }
+  if (!entry.dataOffset) { log("Entry data offset unresolved.", "r"); return; }
+
+  const jobs = buildJobs();
+  if (!jobs || !jobs.length) { log("No work to do — check your input.", "y"); return; }
+
+  const kind = encKind(entry);
+  if (kind === "aes" && !(window.crypto && crypto.subtle)) {
+    log("AES path needs crypto.subtle. Serve this file over http://localhost or https://.", "r");
+    return;
+  }
+
+  S.running = true;
+  S.found = null;
+  S.attempts = 0;
+  S.pending = 0;
+  S.verifyQueue = [];
+  S.verifying = false;
+  S.total = MODE === "dict" ? dictWords().length : S.total;
+  S.t0 = performance.now();
+
+  $("#btnStart").disabled = true;
+  $("#btnStop").disabled = false;
+  $("#result").hidden = true;
+  $("#progFill").style.width = "0%";
+  $("#stAtt").textContent = "0";
+  $("#stTot").textContent = fmt(S.total || 0);
+
+  const u8 = new Uint8Array(S.buffer);
+
+  let poolSrc, initMsg;
+
+  if (kind === "zipcrypto") {
+    const header = u8.slice(entry.dataOffset, entry.dataOffset + 12);
+    const check = (entry.flags & 8) ? (entry.dostime >> 8) & 0xff : (entry.crc >>> 24) & 0xff;
+    poolSrc = ZIPCRYPTO_WORKER;
+    initMsg = { cmd: "init", header: Array.from(header), check };
+    log("Engine: ZipCrypto · check byte " + hex(check) + " · " + THREADS + " workers", "b");
+  } else {
+    const ss = aesSaltSize(entry.aes.strength);
+    const salt = u8.slice(entry.dataOffset, entry.dataOffset + ss);
+    const pv = u8.slice(entry.dataOffset + ss, entry.dataOffset + ss + 2);
+    poolSrc = AES_WORKER;
+    initMsg = { cmd: "init", salt: Array.from(salt), pv: Array.from(pv), klen: aesKeyLen(entry.aes.strength) };
+    log("Engine: WinZip AES-" + aesKeyLen(entry.aes.strength) * 8 + " · PBKDF2-SHA1 ×1000 · " + THREADS + " workers", "y");
+    log("AES keyspace runs ~1000× slower than ZipCrypto. Keep the list tight.", "y");
+  }
+
+  if (kind === "aes") {
+    const CH = 250;
+    const flat = [];
+    for (const j of jobs) for (let i = 0; i < j.words.length; i += CH) flat.push({ cmd: "words", words: j.words.slice(i, i + CH) });
+    jobs.length = 0;
+    jobs.push(...flat);
+  }
+
+  S.pool = createPool(poolSrc, THREADS, {
+    onProgress: (n) => { S.attempts += n; },
+    onFound: (pw) => {
+      S.pending++;
+      S.verifyQueue.push(pw);
+      processVerifyQueue();
+    },
+    onDone: () => {
+      if (S.found) return;
+      // give the verifier a moment to drain
+      setTimeout(() => {
+        if (S.found) return;
+        if (S.verifyQueue.length === 0 && !S.verifying) {
+          finishCrack(false);
+        } else {
+          S.drainThenFinish = true;
+        }
+      }, 120);
+    }
+  });
+
+  S.pool.broadcast(initMsg);
+  setTimeout(() => {
+    jobs.forEach(j => S.pool.submit(j));
+    log("Running · " + fmt(jobs.length) + " jobs queued.", "g");
+  }, 60);
+
+  S.timer = setInterval(tick, 120);
+}
+
+function tick() {
+  if (!S.running) return;
+  const el = (performance.now() - S.t0) / 1000;
+  const rate = el > 0 ? S.attempts / el : 0;
+  $("#stAtt").textContent = fmt(S.attempts);
+  $("#stTime").textContent = secs(el);
+  $("#speedBadge").textContent = fmt(Math.round(rate)) + " H/s";
+  if (S.total) {
+    const pct = Math.min(100, (S.attempts / S.total) * 100);
+    $("#progFill").style.width = pct.toFixed(2) + "%";
+    const remain = Math.max(0, S.total - S.attempts);
+    $("#stEta").textContent = rate > 0 ? secs(remain / rate) : "—";
+  } else {
+    $("#stEta").textContent = "—";
+  }
+}
+
+function finishCrack(success, pw) {
+  S.running = false;
+  clearInterval(S.timer);
+  if (S.pool) { S.pool.stop(); S.pool = null; }
+  $("#btnStart").disabled = false;
+  $("#btnStop").disabled = true;
+
+  if (success) {
+    S.found = pw;
+    $("#progFill").style.width = "100%";
+    $("#speedBadge").textContent = "found";
+    $("#resPw").textContent = pw;
+    $("#result").hidden = false;
+    log("PASSWORD RECOVERED → " + pw, "g");
+  } else {
+    $("#speedBadge").textContent = "exhausted";
+    log("Keyspace exhausted. No match.", "y");
+  }
+}
+
+$("#btnStart").addEventListener("click", () => startCrack());
+$("#btnStop").addEventListener("click", () => {
+  if (!S.running) return;
+  log("Stopped by operator.", "y");
+  finishCrack(false);
+});
+
+$("#resCopy").addEventListener("click", async () => {
+  const t = $("#resPw").textContent;
+  try { await navigator.clipboard.writeText(t); log("Copied to clipboard.", "g"); }
+  catch { log("Clipboard blocked — select and copy manually.", "y"); }
+});
+
+/* =========================================================
+   12. verification queue
+   ========================================================= */
+async function processVerifyQueue() {
+  if (S.verifying) return;
+  S.verifying = true;
+  while (S.verifyQueue.length) {
+    const pw = S.verifyQueue.shift();
+    let ok = false;
+    try {
+      ok = encKind(S.target) === "aes" ? await verifyAES(pw) : await verifyZipCrypto(pw);
+    } catch (e) { ok = false; }
+    if (ok && S.running) {
+      S.verifying = false;
+      finishCrack(true, pw);
+      return;
+    }
+  }
+  S.verifying = false;
+  if (S.drainThenFinish && S.running) {
+    S.drainThenFinish = false;
+    finishCrack(false);
+  }
+}
+
+async function verifyZipCrypto(pw) {
+  const e = S.target;
+  const u8 = new Uint8Array(S.buffer);
+  const start = e.dataOffset;
+  const end = start + e.csize;
+  if (end > u8.length) return false;
+
+  const plain = zipcryptoDecryptAll(pw, u8.subarray(start, end));
+  const data = plain.subarray(12);
+  const method = e.aes ? e.aes.realMethod : e.method;
+
+  let out;
+  if (method === 0) out = data;
+  else if (method === 8) {
+    try { out = await inflateRaw(data); } catch { return false; }
+  } else return false;
+
+  return crc32(out) === e.crc;
+}
+
+async function verifyAES(pw) {
+  const e = S.target;
+  const u8 = new Uint8Array(S.buffer);
+  const ss = aesSaltSize(e.aes.strength);
+  const klen = aesKeyLen(e.aes.strength);
+  const off = e.dataOffset;
+  const salt = u8.subarray(off, off + ss);
+  const ctStart = off + ss + 2;
+  const ctEnd = off + e.csize - 10;
+  if (ctEnd <= ctStart) return false;
+
+  const ct = u8.subarray(ctStart, ctEnd);
+  const auth = u8.subarray(ctEnd, off + e.csize);
+
+  const enc = new TextEncoder();
+  const base = await crypto.subtle.importKey("raw", enc.encode(pw), "PBKDF2", false, ["deriveBits"]);
+  const d = new Uint8Array(await crypto.subtle.deriveBits(
+    { name: "PBKDF2", salt, iterations: 1000, hash: "SHA-1" }, base, (2 * klen + 2) * 8
+  ));
+
+  if (d[2 * klen] !== u8[off + ss] || d[2 * klen + 1] !== u8[off + ss + 1]) return false;
+
+  const authKey = d.subarray(klen, 2 * klen);
+  const hk = await crypto.subtle.importKey("raw", authKey, { name: "HMAC", hash: "SHA-1" }, false, ["sign"]);
+  const mac = new Uint8Array(await crypto.subtle.sign("HMAC", hk, ct));
+
+  for (let i = 0; i < 10; i++) if (mac[i] !== auth[i]) return false;
+  return true;
+}
+
+/* =========================================================
+   13. built-in common list
+   ========================================================= */
+const COMMON_PASSWORDS = [
+  "123456","password","12345678","qwerty","123456789","12345","1234","111111","1234567","dragon",
+  "123123","baseball","abc123","football","monkey","letmein","696969","shadow","master","666666",
+  "qwertyuiop","123321","mustang","1234567890","michael","654321","pussy","superman","1qaz2wsx","7777777",
+  "fuckyou","121212","000000","qazwsx","123qwe","killer","trustno1","jordan","jennifer","zxcvbnm",
+  "asdfgh","hunter","buster","soccer","harley","batman","andrew","tigger","sunshine","iloveyou",
+  "fuckme","2000","charlie","robert","thomas","hockey","ranger","daniel","starwars","klaster",
+  "112233","george","asshole","computer","michelle","jessica","pepper","1111","zxcvbn","555555",
+  "11111111","131313","freedom","777777","pass","fuck","maggie","159753","aaaaaa","ginger",
+  "princess","joshua","cheese","amanda","summer","love","ashley","nicole","chelsea","biteme",
+  "matthew","access","yankees","987654321","dallas","austin","thunder","taylor","matrix","mobilemail",
+  "mom","monitor","monitoring","montana","moon","moscow","kristen","kristina","root","admin",
+  "administrator","toor","passw0rd","p@ssw0rd","p@ssword","password1","password12","password123","Pa$$w0rd","qwerty123",
+  "letmein123","welcome","welcome1","welcome123","changeme","secret","default","guest","test","test123",
+  "shadow1","sunshine1","football1","baseball1","superman1","batman1","trustno1!","iloveyou1","princess1","michael1"
+];
+
+/* =========================================================
+   14. inspector
+   ========================================================= */
+wireDrop($("#dropInsp"), $("#fileInsp"), async (f) => {
+  try {
+    const a = await loadArchive(f);
+    const d = describeEnc(a.entries);
+    $("#inspBadge").textContent = d.label;
+    $("#inspBadge").className = "badge " + d.cls;
+    $("#inspCount").textContent = a.entries.length + " entries";
+
+    let encBytes = 0, plainBytes = 0;
+    a.entries.forEach(e => { if (e.encrypted) encBytes += e.usize; else plainBytes += e.usize; });
+
+    $("#inspSummary").innerHTML =
+      '<dl class="kv">' +
+      "<dt>file</dt><dd>" + f.name.replace(/[<>&]/g, "") + "</dd>" +
+      "<dt>size</dt><dd>" + bytes(f.size) + "</dd>" +
+      "<dt>entries</dt><dd>" + a.entries.length + "</dd>" +
+      "<dt>encryption</dt><dd>" + d.label + "</dd>" +
+      "<dt>plain bytes</dt><dd>" + bytes(plainBytes) + "</dd>" +
+      "<dt>encrypted bytes</dt><dd>" + bytes(encBytes) + "</dd>" +
+      "</dl>";
+
+    const body = $("#inspBody");
+    body.innerHTML = "";
+    a.entries.forEach(e => {
+      const tr = document.createElement("tr");
+      const m = e.aes ? "AES-" + aesKeyLen(e.aes.strength) * 8 : (e.method === 0 ? "store" : e.method === 8 ? "deflate" : "m" + e.method);
+      const encTag = !e.encrypted ? '<span class="tag">—</span>'
+        : e.aes ? '<span class="tag a">AES</span>' : '<span class="tag e">ZipCrypto</span>';
+      tr.innerHTML =
+        "<td>" + e.name.replace(/[<>&]/g, "") + "</td>" +
+        "<td>" + m + "</td>" +
+        "<td>" + hex(e.flags) + "</td>" +
+        "<td>" + bytes(e.usize) + "</td>" +
+        "<td>" + bytes(e.csize) + "</td>" +
+        "<td>" + hex(e.crc) + "</td>" +
+        "<td>" + encTag + "</td>";
+      body.appendChild(tr);
+    });
+  } catch (err) {
+    $("#inspBadge").textContent = "error";
+    $("#inspBadge").className = "badge bad";
+    $("#inspSummary").innerHTML = '<span style="color:#ff5f56">' + err.message.replace(/[<>&]/g, "") + "</span>";
+  }
+});
+
+/* =========================================================
+   15. wordlist forge
+   ========================================================= */
+const LEET = { a: "4", e: "3", i: "1", o: "0", s: "5", t: "7", b: "8", g: "9" };
+
+$$('#p-forge [data-m]').forEach(c => {
+  c.addEventListener("change", () => c.parentElement.classList.toggle("on", c.checked));
+});
+
+function leetOf(w) {
+  let out = "";
+  for (const ch of w) out += LEET[ch.toLowerCase()] && Math.random() < 0.85 ? LEET[ch.toLowerCase()] : ch;
+  return out;
+}
+
+function titleCase(w) { return w ? w[0].toUpperCase() + w.slice(1).toLowerCase() : w; }
+function upperCase(w) { return w.toUpperCase(); }
+
+$("#forgeRun").addEventListener("click", () => {
+  const bases = $("#forgeBase").value.split(/\r?\n/).map(s => s.trim()).filter(Boolean);
+  if (!bases.length) { $("#forgeInfo").textContent = "no base words"; return; }
+
+  const on = new Set($$('#p-forge [data-m]:checked').map(c => c.dataset.m));
+  const nd = Math.max(1, Math.min(6, +$("#forgeNum").value || 4));
+  const syms = $("#forgeSym").value || "!@#$";
+  const years = ["2020","2021","2022","2023","2024","2025","2026","1990","1995","2000","99","01","123"];
+  const out = new Set();
+
+  const cap = 200000;
+
+  for (const base of bases) {
+    const variants = new Set([base]);
+    if (on.has("cap")) variants.add(titleCase(base));
+    if (on.has("up")) variants.add(upperCase(base));
+    if (on.has("rev")) variants.add([...base].reverse().join(""));
+    if (on.has("dup")) variants.add(base + base);
+    if (on.has("case")) {
+      const n = Math.min(base.length, 6);
+      for (let mask = 0; mask < (1 << n); mask++) {
+        let s = "";
+        for (let i = 0; i < base.length; i++) {
+          const ch = base[i];
+          s += (i < n && (mask >> i) & 1) ? ch.toUpperCase() : ch.toLowerCase();
+        }
+        variants.add(s);
+      }
+    }
+    if (on.has("leet")) {
+      for (let i = 0; i < 6; i++) variants.add(leetOf(base));
+    }
+
+    for (const v of variants) {
+      out.add(v);
+      if (on.has("num")) {
+        for (let d = 0; d < Math.pow(10, Math.min(nd, 3)) && out.size < cap; d++) {
+          out.add(v + String(d).padStart(nd, "0"));
+        }
+        for (let i = 0; i <= 999; i++) { out.add(v + i); if (out.size > cap) break; }
+      }
+      if (on.has("year")) for (const y of years) out.add(v + y);
+      if (on.has("sym")) {
+        for (const s of syms) { out.add(v + s); out.add(s + v); out.add(v + s + s); }
+      }
+      if (out.size > cap) break;
+    }
+    if (out.size > cap) break;
+  }
+
+  const arr = Array.from(out).slice(0, cap);
+  $("#forgeOut").value = arr.join("\n");
+  $("#forgeBadge").textContent = fmt(arr.length) + " words";
+  $("#forgeInfo").innerHTML = "generated <b>" + fmt(arr.length) + "</b> candidates";
+});
+
+$("#forgeSend").addEventListener("click", () => {
+  const txt = $("#forgeOut").value.trim();
+  if (!txt) { log("Forge output is empty.", "y"); return; }
+  $("#dictText").value = txt;
+  refreshDictCount();
+  switchTo("crack");
+  log("Forge output pushed to Cracker (" + fmt(dictWords().length) + " words).", "g");
+});
+
+$("#forgeDl").addEventListener("click", () => {
+  const txt = $("#forgeOut").value;
+  if (!txt) return;
+  const blob = new Blob([txt], { type: "text/plain" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "wordlist.txt";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+});
+
+/* =========================================================
+   16. mask lab
+   ========================================================= */
+function mlUpdate() {
+  const sets = parseMask($("#mlMask").value, { 1: "", 2: "", 3: "", 4: "" });
+  const n = keyspaceOf(sets);
+  $("#mlKeyspace").innerHTML = "keyspace <b>" + (isFinite(n) ? fmt(n) : "∞") + "</b> · length " + sets.length + " · " + (isFinite(n) ? estTime(n) : "—");
+
+  const body = $("#mlBody");
+  body.innerHTML = "";
+  sets.forEach((s, i) => {
+    const tr = document.createElement("tr");
+    const shown = s.length > 40 ? s.slice(0, 40) + "…" : s;
+    tr.innerHTML = "<td>" + (i + 1) + "</td><td>" + (s.length === 1 ? "literal" : "set") + "</td><td>" + s.length + "</td><td>" + shown.replace(/[<>&]/g, "") + "</td>";
+    body.appendChild(tr);
+  });
+
+  // sample generation
+  const samples = [];
+  if (isFinite(n) && n > 0) {
+    const take = Math.min(24, n);
+    const step = Math.max(1, Math.floor(n / take));
+    for (let k = 0; k < take; k++) {
+      let idx = k * step;
+      let s = "";
+      for (let i = sets.length - 1; i >= 0; i--) {
+        const b = sets[i].length;
+        s = sets[i][idx % b] + s;
+        idx = Math.floor(idx / b);
+      }
+      samples.push(s);
+    }
+  }
+  $("#mlSample").textContent = samples.length ? samples.join("\n") : "—";
+}
+
+$("#mlMask").addEventListener("input", mlUpdate);
+$$("#p-mask [data-tok]").forEach(b => {
+  b.addEventListener("click", () => {
+    const i = $("#mlMask");
+    i.value += b.dataset.tok;
+    mlUpdate();
+  });
+});
+$("#mlSend").addEventListener("click", () => {
+  $("#maskInput").value = $("#mlMask").value;
+  $$("#modeSeg button").forEach(x => x.classList.toggle("on", x.dataset.mode === "mask"));
+  $$(".modebox").forEach(m => m.classList.remove("on"));
+  $("#mb-mask").classList.add("on");
+  MODE = "mask";
+  updateKeyspace();
+  switchTo("crack");
+  log("Mask pushed to Cracker: " + $("#maskInput").value, "g");
+});
+
+/* =========================================================
+   17. hashcat export
+   ========================================================= */
+wireDrop($("#dropExp"), $("#fileExp"), async (f) => {
+  try {
+    const a = await loadArchive(f);
+    const enc = a.entries.filter(e => e.encrypted);
+    if (!enc.length) {
+      $("#expBadge").textContent = "no encryption";
+      $("#expBadge").className = "badge ok";
+      $("#expCmd").textContent = "Nothing to crack — archive is unencrypted.";
+      $("#expMat").textContent = "—";
+      return;
+    }
+    const e = enc[0];
+    const kind = encKind(e);
+    const u8 = new Uint8Array(a.buf);
+    const safeName = f.name.replace(/[^\w.-]/g, "_");
+
+    let mode, mat, note;
+
+    if (kind === "aes") {
+      const ss = aesSaltSize(e.aes.strength);
+      const klen = aesKeyLen(e.aes.strength);
+      const salt = u8.slice(e.dataOffset, e.dataOffset + ss);
+      const pv = u8.slice(e.dataOffset + ss, e.dataOffset + ss + 2);
+      mode = klen === 32 ? 13600 : klen === 24 ? 13600 : 13600;
+      $("#expBadge").textContent = "WinZip AES-" + klen * 8;
+      $("#expBadge").className = "badge live";
+      mat =
+        "entry      : " + e.name + "\n" +
+        "scheme     : WinZip AE-" + (e.aes.version === 2 ? 2 : 1) + "\n" +
+        "aes bits   : " + klen * 8 + "\n" +
+        "kdf        : PBKDF2-HMAC-SHA1, 1000 iterations\n" +
+        "salt       : " + Array.from(salt).map(b => b.toString(16).padStart(2, "0")).join("") + "\n" +
+        "verify     : " + Array.from(pv).map(b => b.toString(16).padStart(2, "0")).join("") + "\n" +
+        "csize      : " + e.csize;
+      note = "hashcat mode 13600 covers WinZip AES (128/192/256). 7z AES is 11600.";
+      $("#expCmd").textContent =
+        "# 1 — extract the hash line\n" +
+        "zip2john " + safeName + " > " + safeName + ".hash\n\n" +
+        "# 2 — run hashcat\n" +
+        "hashcat -m 13600 -a 0 " + safeName + ".hash wordlist.txt -O -w 3\n\n" +
+        "# mask attack, AES-256\n" +
+        "hashcat -m 13600 -a 3 " + safeName + ".hash ?u?l?l?l?l?d?d -O -w 3";
+    } else {
+      const header = u8.slice(e.dataOffset, e.dataOffset + 12);
+      const check = (e.flags & 8) ? (e.dostime >> 8) & 0xff : (e.crc >>> 24) & 0xff;
+      mode = (e.flags & 8) ? 17225 : 17200;
+      $("#expBadge").textContent = "ZipCrypto";
+      $("#expBadge").className = "badge warn";
+      mat =
+        "entry      : " + e.name + "\n" +
+        "scheme     : PKZIP traditional (ZipCrypto)\n" +
+        "flags      : " + hex(e.flags) + ((e.flags & 8) ? "  (data descriptor → time check)" : "  (crc check)") + "\n" +
+        "crc32      : " + hex(e.crc) + "\n" +
+        "dos time   : " + hex(e.dostime) + "\n" +
+        "check byte : " + hex(check) + "\n" +
+        "header     : " + Array.from(header).map(b => b.toString(16).padStart(2, "0")).join("") + "\n" +
+        "csize      : " + e.csize;
+      note = "hashcat 17200 = PKZIP (1-byte check), 17210 = 2-byte, 17225 = time-based check, 17230 = mixed.";
+      $("#expCmd").textContent =
+        "# 1 — extract the hash line\n" +
+        "zip2john " + safeName + " > " + safeName + ".hash\n\n" +
+        "# 2 — dictionary\n" +
+        "hashcat -m " + mode + " -a 0 " + safeName + ".hash wordlist.txt -O -w 3\n\n" +
+        "# 3 — rules\n" +
+        "hashcat -m " + mode + " -a 0 " + safeName + ".hash wordlist.txt -r best64.rule -O -w 3\n\n" +
+        "# 4 — mask\n" +
+        "hashcat -m " + mode + " -a 3 " + safeName + ".hash ?u?l?l?l?l?d?d -O -w 3";
+    }
+
+    $("#expInfo").innerHTML =
+      '<dl class="kv">' +
+      "<dt>archive</dt><dd>" + f.name.replace(/[<>&]/g, "") + "</dd>" +
+      "<dt>entries</dt><dd>" + a.entries.length + "</dd>" +
+      "<dt>encrypted</dt><dd>" + enc.length + "</dd>" +
+      "<dt>first target</dt><dd>" + e.name.replace(/[<>&]/g, "") + "</dd>" +
+      "<dt>hashcat mode</dt><dd>" + mode + "</dd>" +
+      "</dl><div class='hint' style='margin-top:10px'>" + note + "</div>";
+
+    $("#expMat").textContent = mat;
+  } catch (err) {
+    $("#expBadge").textContent = "error";
+    $("#expBadge").className = "badge bad";
+    $("#expCmd").textContent = err.message;
+  }
+});
+
+$("#expCopy").addEventListener("click", async () => {
+  try { await navigator.clipboard.writeText($("#expCmd").textContent); }
+  catch (e) { /* ignore */ }
+});
+
+/* =========================================================
+   18. rule smith
+   ========================================================= */
+const RULE_BUNDLES = {
+  best64: [
+    ":", "l", "u", "c", "C", "r", "d", "f", "s0", "s1", "s2", "s3", "s4", "s5", "s6", "s7",
+    "$0", "$1", "$2", "$3", "$4", "$5", "$6", "$7", "$8", "$9",
+    "$!", "$@", "$#", "$.", "$_", "-",
+    "^0", "^1", "sa", "sb", "se", "so", "ss",
+    "l$1", "l$2", "l$3", "u$1", "c$1", "c$2",
+    "d", "dd", "ddd", "f", "r",
+    "sa@", "se3", "so0", "si1", "ss$",
+    "$1$2", "$1$2$3", "$2$0$2$4"
+  ],
+  leetspeak: [
+    "sa@", "se3", "si1", "so0", "ss$", "st7", "sb8",
+    "sa@se3si1so0", "se3si1so0", "sa@si1so0",
+    "sa@ss$", "so0ss$", "si1ss$"
+  ],
+  dive: [
+    ":", "l", "u", "c", "C",
+    "d", "dd", "ddd", "dddd",
+    "$1", "$12", "$123", "$1234", "$12345",
+    "$!", "$1!", "$12!", "$123!",
+    "sa@", "se3", "si1", "so0",
+    "r", "l r", "u r", "c r"
+  ],
+  toggles: [
+    "T0", "T1", "T2", "T3", "T4", "T5", "T6", "T7",
+    "T0T1", "T1T2", "T2T3", "T3T4",
+    "TN", "T0TN"
+  ],
+  appends: [
+    "$0", "$1", "$2", "$3", "$4", "$5", "$6", "$7", "$8", "$9",
+    "$a", "$e", "$i", "$o", "$s",
+    "$1$2$3", "$0$0", "$1$1",
+    "$2$0$2$4", "$2$0$2$5", "$2$0$2$6",
+    "$1$9$8$0", "$1$9$9$0", "$2$0$0$0", "$2$0$1$0"
+  ]
+};
+
+function applyRule(word, rule) {
+  // minimal hashcat rule interpreter — enough for the presets above
+  let s = word;
+  const ops = rule.match(/([TlucCrdrsf$^\[\]{}@]|[0-9])/g);
+  if (!ops) return s;
+
+  for (let i = 0; i < ops.length; i++) {
+    const op = ops[i];
+    if (op === ":") continue;
+    else if (op === "l") s = s.toLowerCase();
+    else if (op === "u") s = s.toUpperCase();
+    else if (op === "c") s = s ? s[0].toUpperCase() + s.slice(1).toLowerCase() : s;
+    else if (op === "C") s = s ? s[0].toLowerCase() + s.slice(1).toUpperCase() : s;
+    else if (op === "r") s = [...s].reverse().join("");
+    else if (op === "d") s = s + s;
+    else if (op === "f") s = s + [...s].reverse().join("");
+    else if (op === "$") { const n = ops[++i]; if (n) s = s + n; }
+    else if (op === "^") { const n = ops[++i]; if (n) s = n + s; }
+    else if (op === "s") {
+      const a = ops[++i]; const b = ops[++i];
+      if (a && b) s = s.split(a).join(b);
+    }
+    else if (op === "T") { const n = ops[++i]; if (n !== undefined) { const k = +n; if (k >= 0 && k < s.length) s = s.slice(0, k) + s[k].toUpperCase() + s.slice(k + 1); } }
+    else if (op === "N") s = s.replace(/[0-9]/g, "");
+    else if (/[0-9]/.test(op)) { /* positional modifier — skipped in preview */ }
+    else { /* unknown token */ }
+  }
+  return s;
+}
+
+function renderRules() {
+  const txt = $("#ruleOut").value;
+  const rules = txt.split(/\r?\n/).filter(Boolean);
+  $("#ruleCount").textContent = rules.length + " rules";
+  const base = $("#ruleBase").value || "password";
+  const out = [];
+  const seen = new Set();
+  for (const r of rules.slice(0, 300)) {
+    const v = applyRule(base, r);
+    if (!seen.has(v)) { seen.add(v); out.push(v.padEnd(20) + "  ←  " + r); }
+  }
+  $("#rulePreview").textContent = out.join("\n") || "—";
+}
+
+$$("#p-rules [data-rule]").forEach(b => {
+  b.addEventListener("click", () => {
+    $("#ruleOut").value = RULE_BUNDLES[b.dataset.rule].join("\n");
+    renderRules();
+  });
+});
+$("#ruleOut").addEventListener("input", renderRules);
+$("#ruleBase").addEventListener("input", renderRules);
+$("#ruleDl").addEventListener("click", () => {
+  const blob = new Blob([$("#ruleOut").value], { type: "text/plain" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "custom.rule";
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+});
+
+/* =========================================================
+   19. bench
+   ========================================================= */
+$("#benchRun").addEventListener("click", () => {
+  const btn = $("#benchRun");
+  btn.disabled = true;
+  $("#benchBadge").textContent = "running";
+  $("#benchBadge").className = "badge live";
+  $("#benchOut").textContent = "spinning up " + THREADS + " workers…";
+
+  let total = 0, done = 0;
+  const t0 = performance.now();
+
+  const pool = createPool(ZIPCRYPTO_WORKER, THREADS, {
+    onProgress: () => {},
+    onFound: () => {},
+    onDone: () => {
+      const el = (performance.now() - t0) / 1000;
+      const rate = total / el;
+      $("#benchTot").textContent = fmt(Math.round(rate)) + " H/s";
+      $("#benchBadge").textContent = "done";
+      $("#benchBadge").className = "badge ok";
+      $("#benchOut").textContent =
+        "workers    : " + THREADS + "\n" +
+        "elapsed    : " + el.toFixed(2) + " s\n" +
+        "hashes     : " + fmt(total) + "\n" +
+        "throughput : " + fmt(Math.round(rate)) + " H/s\n" +
+        "per worker : " + fmt(Math.round(rate / THREADS)) + " H/s";
+      btn.disabled = false;
+    }
+  });
+
+  pool.broadcast({ cmd: "init", header: [1,2,3,4,5,6,7,8,9,10,11,12], check: 0 });
+
+  setTimeout(() => {
+    const per = Math.max(2000, Math.round(200000 / THREADS));
+    for (let i = 0; i < THREADS * 4; i++) pool.submit({ cmd: "bench", ms: 180 });
+  }, 50);
+
+  // collect counts by polling the pool's internal progress is not available here —
+  // instead rely on worker done counts via a shim
+  const shim = setInterval(() => {
+    if (!pool.workers.length) { clearInterval(shim); return; }
+  }, 100);
+
+  // patch: wrap the done handler by counting completed jobs
+  let completed = 0;
+  const origOnDone = pool.submit;
+  // simpler: count via monkey-patched worker messages
+  pool.workers.forEach(w => {
+    const prev = w.onmessage;
+    w.onmessage = (e) => {
+      const d = e.data;
+      if (d && d.done) {
+        total += d.count || 0;
+        completed++;
+      }
+      prev(e);
+    };
+  });
+
+  setTimeout(() => { clearInterval(shim); }, 60000);
+});
+
+/* =========================================================
+   20. tab routing
+   ========================================================= */
+function switchTo(name) {
+  $$("#nav .tab").forEach(t => t.classList.toggle("on", t.dataset.p === name));
+  $$(".panel").forEach(p => p.classList.toggle("on", p.id === "p-" + name));
+  window.scrollTo({ top: 0, behavior: "smooth" });
+  if (name === "mask") mlUpdate();
+}
+$$("#nav .tab").forEach(t => t.addEventListener("click", () => switchTo(t.dataset.p)));
+
+/* =========================================================
+   21. boot
+   ========================================================= */
+refreshDictCount();
+updateKeyspace();
+mlUpdate();
+log("KEYSMITH online · " + THREADS + " workers · engine idle.", "g");
+log("Drop a .zip to begin. Nothing leaves this browser.", "d");
 </script>
 </body>
 </html>
