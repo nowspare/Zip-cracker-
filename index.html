@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>zipkey — zip password recovery</title>
+<style>
+  :root{
+    --bg:#0b0d10; --panel:#11151a; --panel2:#161b21; --line:#1f262f;
+    --txt:#c9d2db; --dim:#6b7683; --acc:#4ea1ff; --ok:#4ade80; --bad:#f87171; --warn:#fbbf24;
+    --mono:ui-monospace,"SF Mono","Cascadia Mono",Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--txt);font-family:var(--mono);font-size:13px;line-height:1.5}
+  .wrap{max-width:880px;margin:0 auto;padding:30px 18px 70px}
+  h1{font-size:15px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:#eaf0f6;margin:0}
+  .sub{color:var(--dim);margin:6px 0 26px;font-size:12px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:14px}
+  .lbl{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim);margin-bottom:8px;display:block}
+
+  #drop{border:1px dashed #2a333d;border-radius:8px;padding:26px 18px;text-align:center;cursor:pointer;transition:.15s;background:var(--panel2)}
+  #drop.hover{border-color:var(--acc);background:#131b25}
+  #drop.has{border-style:solid;border-color:#2f3a46}
+  #zipname{color:var(--acc);font-size:12px}
+  .hint{color:var(--dim);font-size:11px;margin-top:6px}
+
+  .modes{display:flex;gap:8px;margin-bottom:14px}
+  .mode{flex:1;padding:9px 12px;background:var(--panel2);border:1px solid var(--line);border-radius:6px;color:var(--dim);
+        cursor:pointer;text-align:center;font-family:var(--mono);font-size:12px;letter-spacing:.05em;transition:.12s}
+  .mode.on{color:#eaf0f6;border-color:var(--acc);background:#101a26}
+
+  textarea{width:100%;min-height:150px;background:#0c1015;border:1px solid var(--line);border-radius:6px;color:var(--txt);
+           font-family:var(--mono);font-size:12px;padding:10px;resize:vertical;outline:none}
+  textarea:focus{border-color:#2e4a68}
+  input[type=text],input[type=number]{background:#0c1015;border:1px solid var(--line);border-radius:6px;color:var(--txt);
+           font-family:var(--mono);font-size:12px;padding:8px 10px;outline:none;width:100%}
+  input[type=text]:focus,input[type=number]:focus{border-color:#2e4a68}
+
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-top:10px}
+  .row > *{flex:1 1 auto}
+  .row .tight{flex:0 0 auto}
+
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;margin-top:6px}
+  .chk{display:flex;align-items:center;gap:7px;background:var(--panel2);border:1px solid var(--line);
+       border-radius:6px;padding:8px 10px;cursor:pointer;font-size:12px;color:var(--txt)}
+  .chk input{accent-color:var(--acc);margin:0}
+  .chk span{color:var(--dim);font-size:11px}
+
+  .btns{display:flex;gap:10px;margin-top:6px}
+  button{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;padding:11px 18px;
+         border-radius:6px;border:1px solid var(--line);background:var(--panel2);color:var(--txt);cursor:pointer;transition:.12s}
+  button:hover:not(:disabled){border-color:#33414f}
+  button:disabled{opacity:.35;cursor:not-allowed}
+  #start{flex:1;background:#12233a;border-color:#2c4f7c;color:#cfe3ff}
+  #start:hover:not(:disabled){background:#17304f;border-color:var(--acc)}
+  #cancel{background:#2a1416;border-color:#5a2228;color:#ffb4b4;display:none}
+  #cancel:hover:not(:disabled){background:#3a1a1d}
+
+  .barwrap{height:6px;background:#0c1015;border-radius:3px;overflow:hidden;margin:14px 0 10px;border:1px solid var(--line)}
+  #bar{height:100%;width:0;background:linear-gradient(90deg,#2c6fc4,#4ea1ff);transition:width .2s}
+
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px}
+  .stat{background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:9px 11px}
+  .stat .k{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:var(--dim)}
+  .stat .v{font-size:14px;color:#eaf0f6;margin-top:3px}
+
+  #status{color:var(--dim);font-size:12px;margin-top:12px;min-height:18px}
+  #status.ok{color:var(--ok)} #status.bad{color:var(--bad)} #status.warn{color:var(--warn)}
+
+  #result{display:none;margin-top:14px;border:1px solid #234d33;background:#0e1b13;border-radius:8px;padding:14px}
+  #result .k{font-size:10px;letter-spacing:.1em;text-transform:uppercase;color:#5f9c76}
+  #rpw{font-size:20px;color:#7ff0a8;word-break:break-all;margin:6px 0 10px;letter-spacing:.03em}
+  #copy{font-size:11px;padding:7px 13px}
+
+  #meta{color:var(--dim);font-size:11px;margin-top:12px}
+  code{color:#8fc7ff}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>zipkey</h1>
+  <div class="sub">zip password recovery · wordlist + brute force · runs in the tab</div>
+
+  <!-- archive -->
+  <div class="card">
+    <span class="lbl">archive</span>
+    <div id="drop">
+      <div>drop a <b>.zip</b> here, or click to pick</div>
+      <div id="zipname" class="hint">no archive loaded</div>
+    </div>
+    <input type="file" id="file" accept=".zip,application/zip" hidden>
+  </div>
+
+  <!-- mode -->
+  <div class="modes">
+    <div class="mode on" data-mode="wordlist">wordlist</div>
+    <div class="mode" data-mode="brute">brute force</div>
+  </div>
+
+  <!-- wordlist panel -->
+  <div class="card" id="panel-wordlist">
+    <span class="lbl">candidate list — one per line</span>
+    <textarea id="wordlist" placeholder="password&#10;123456&#10;letmein&#10;qwerty&#10;..."></textarea>
+    <div class="row">
+      <button class="tight" id="wlfile">load .txt</button>
+      <input type="file" id="wlf" accept=".txt,text/plain" hidden>
+      <span class="hint" id="wlinfo" style="flex:1;text-align:right"></span>
+    </div>
+    <div class="row">
+      <label class="chk" style="flex:1"><input type="checkbox" id="hybrid"> <div>append 0000–9999 to every word <span>×10000 candidates</span></div></label>
+    </div>
+  </div>
+
+  <!-- brute panel -->
+  <div class="card" id="panel-brute" style="display:none">
+    <span class="lbl">charset</span>
+    <div class="grid">
+      <label class="chk"><input type="checkbox" id="c-lower" checked> lowercase <span>a–z</span></label>
+      <label class="chk"><input type="checkbox" id="c-upper"> uppercase <span>A–Z</span></label>
+      <label class="chk"><input type="checkbox" id="c-digit" checked> digits <span>0–9</span></label>
+      <label class="chk"><input type="checkbox" id="c-sym"> symbols <span>!@#$…</span></label>
+    </div>
+    <div class="row">
+      <input type="text" id="c-custom" placeholder="extra chars (merged into charset)">
+    </div>
+    <div class="row">
+      <div>
+        <span class="lbl" style="margin:0 0 4px">min length</span>
+        <input type="number" id="minlen" value="1" min="1" max="32">
+      </div>
+      <div>
+        <span class="lbl" style="margin:0 0 4px">max length</span>
+        <input type="number" id="maxlen" value="6" min="1" max="32">
+      </div>
+    </div>
+    <div class="hint" style="margin-top:10px">speed note: legacy ZipCrypto ≈ 10⁴–10⁵ try/s, AES ≈ 10²–10³ try/s in a browser — the AES key check is real crypto work per attempt.</div>
+  </div>
+
+  <!-- controls -->
+  <div class="card">
+    <div class="btns">
+      <button id="start" disabled>start</button>
+      <button id="cancel">cancel</button>
+    </div>
+    <div class="barwrap"><div id="bar"></div></div>
+    <div class="stats">
+      <div class="stat"><div class="k">attempts</div><div class="v" id="st-attempts">0</div></div>
+      <div class="stat"><div class="k">speed</div><div class="v" id="st-speed">—</div></div>
+      <div class="stat"><div class="k">elapsed</div><div class="v" id="st-elapsed">0s</div></div>
+      <div class="stat"><div class="k">eta</div><div class="v" id="st-eta">—</div></div>
+    </div>
+    <div id="status"></div>
+    <div id="meta"></div>
+    <div id="result">
+      <div class="k">password recovered</div>
+      <div id="rpw"></div>
+      <button id="copy">copy</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ============ WORKER SOURCE (raw text, instantiated as Blob) ============ -->
+<script type="text/plain" id="worker-src">
+importScripts('https://unpkg.com/@zip.js/zip.js/dist/zip.min.js');
+
+let cancel = false;
+let attempts = 0;
+let startTime = 0;
+let lastReport = 0;
+
+class NullWriter {
+  constructor() { this.size = 0; }
+  async init() {}
+  async writeUint8Array(arr) { this.size += arr.length; }
+  async getData() { return null; }
+}
+
+self.onmessage = async (e) => {
+  const msg = e.data;
+  if (!msg) return;
+  if (msg.type === 'cancel') { cancel = true; return; }
+  if (msg.type === 'start') {
+    cancel = false;
+    attempts = 0;
+    startTime = performance.now();
+    lastReport = startTime;
+    try {
+      await run(msg);
+    } catch (err) {
+      self.postMessage({ type: 'error', message: String((err && err.message) || err) });
+    }
+  }
+};
+
+function report(force) {
+  const now = performance.now();
+  if (!force && now - lastReport < 150) return;
+  lastReport = now;
+  const elapsed = (now - startTime) / 1000;
+  self.postMessage({ type: 'progress', attempts, elapsed, speed: attempts / Math.max(elapsed, 1e-6) });
+}
+
+function found(pw) {
+  const elapsed = (performance.now() - startTime) / 1000;
+  self.postMessage({ type: 'found', password: pw, attempts, elapsed });
+}
+
+async function run(msg) {
+  const { file, mode, wordlist, charset, minLen, maxLen, hybrid } = msg;
+
+  const reader = new zip.ZipReader(new zip.BlobReader(file));
+  const entries = await reader.getEntries();
+  const files = entries.filter(en => !en.directory);
+  if (!files.length) throw new Error('archive contains no files');
+
+  const enc = files.filter(en => en.encrypted);
+  if (!enc.length) {
+    self.postMessage({ type: 'notencrypted' });
+    return;
+  }
+
+  // smallest encrypted entry = cheapest password check
+  enc.sort((a, b) => (a.uncompressedSize || 0) - (b.uncompressedSize || 0));
+  const target = enc[0];
+
+  let total = 0;
+  if (mode === 'wordlist') {
+    for (let i = 0; i < wordlist.length; i++) if (wordlist.charCodeAt(i) === 10) total++;
+    total += 1;
+    if (hybrid) total *= 10000;
+  } else {
+    const L = charset.length;
+    for (let len = minLen; len <= maxLen; len++) total += Math.pow(L, len);
+  }
+
+  self.postMessage({
+    type: 'meta',
+    targetName: target.filename,
+    targetSize: target.uncompressedSize || 0,
+    encryptedCount: enc.length,
+    totalCount: files.length,
+    total
+  });
+
+  const writer = new NullWriter();
+  async function tryPassword(pw) {
+    try {
+      writer.size = 0;
+      await target.getData(writer, { password: pw });
+      return true;
+    } catch (err) {
+      return false;
+    }
+  }
+
+  if (mode === 'wordlist') {
+    let pos = 0;
+    const n = wordlist.length;
+    while (pos <= n) {
+      if (cancel) { self.postMessage({ type: 'cancelled' }); return; }
+      let nl = wordlist.indexOf('\n', pos);
+      if (nl === -1) nl = n;
+      let w = wordlist.slice(pos, nl);
+      if (w.length && w.charCodeAt(w.length - 1) === 13) w = w.slice(0, -1);
+      pos = nl + 1;
+
+      if (w.length) {
+        attempts++;
+        if (await tryPassword(w)) { found(w); return; }
+        if (hybrid) {
+          for (let k = 0; k <= 9999; k++) {
+            if (cancel) { self.postMessage({ type: 'cancelled' }); return; }
+            const c = w + k;
+            attempts++;
+            if (await tryPassword(c)) { found(c); return; }
+            if ((k & 63) === 0) report(false);
+          }
+        }
+      }
+      if ((attempts & 7) === 0) report(false);
+      if (nl === n) break;
+    }
+    report(true);
+    self.postMessage({ type: 'exhausted', attempts });
+    return;
+  }
+
+  const L = charset.length;
+  for (let len = minLen; len <= maxLen; len++) {
+    const idx = new Array(len).fill(0);
+    const totalAtLen = Math.pow(L, len);
+    for (let done = 0; done < totalAtLen; done++) {
+      if (cancel) { self.postMessage({ type: 'cancelled' }); return; }
+      let pw = '';
+      for (let k = 0; k < len; k++) pw += charset[idx[k]];
+      attempts++;
+      if (await tryPassword(pw)) { found(pw); return; }
+      let p = len - 1;
+      while (p >= 0 && ++idx[p] === L) { idx[p] = 0; p--; }
+      if ((done & 127) === 0) report(false);
+    }
+    report(true);
+  }
+  self.postMessage({ type: 'exhausted', attempts });
+}
+</script>
+
+<!-- ============ MAIN ============ -->
+<script>
+(function () {
+  'use strict';
+
+  const $ = (id) => document.getElementById(id);
+
+  let zipFile = null;
+  let worker = null;
+  let running = false;
+  let mode = 'wordlist';
+  let totalCandidates = 0;
+  let bigWordlist = null; // {name, text} for large files kept out of the textarea
+
+  // ---------- archive ----------
+  const drop = $('drop'), fileInput = $('file');
+
+  drop.addEventListener('click', () => fileInput.click());
+  fileInput.addEventListener('change', () => {
+    if (fileInput.files[0]) setZip(fileInput.files[0]);
+  });
+
+  ['dragenter', 'dragover'].forEach(ev =>
+    drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('hover'); })
+  );
+  ['dragleave', 'drop'].forEach(ev =>
+    drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('hover'); })
+  );
+  drop.addEventListener('drop', e => {
+    const f = e.dataTransfer.files[0];
+    if (f) setZip(f);
+  });
+
+  function fmtBytes(n) {
+    if (n < 1024) return n + ' B';
+    if (n < 1048576) return (n / 1024).toFixed(1) + ' KB';
+    if (n < 1073741824) return (n / 1048576).toFixed(1) + ' MB';
+    return (n / 1073741824).toFixed(2) + ' GB';
+  }
+
+  function setZip(f) {
+    zipFile = f;
+    $('zipname').textContent = f.name + '  ·  ' + fmtBytes(f.size);
+    drop.classList.add('has');
+    $('meta').textContent = '';
+    refreshStart();
+  }
+
+  // ---------- mode ----------
+  document.querySelectorAll('.mode').forEach(el => {
+    el.addEventListener('click', () => {
+      if (running) return;
+      document.querySelectorAll('.mode').forEach(m => m.classList.remove('on'));
+      el.classList.add('on');
+      mode = el.dataset.mode;
+      $('panel-wordlist').style.display = mode === 'wordlist' ? '' : 'none';
+      $('panel-brute').style.display = mode === 'brute' ? '' : 'none';
+    });
+  });
+
+  // ---------- wordlist file ----------
+  $('wlfile').addEventListener('click', () => $('wlf').click());
+  $('wlf').addEventListener('change', () => {
+    const f = $('wlf').files[0];
+    if (!f) return;
+    const r = new FileReader();
+    r.onload = () => {
+      const text = r.result;
+      const lines = (text.match(/\n/g) || []).length + 1;
+      if (f.size > 8 * 1024 * 1024) {
+        bigWordlist = { name: f.name, text };
+        $('wordlist').value = '';
+        $('wlinfo').textContent = f.name + '  ·  ' + lines.toLocaleString() + ' lines  ·  ' + fmtBytes(f.size);
+      } else {
+        bigWordlist = null;
+        $('wordlist').value = text;
+        $('wlinfo').textContent = f.name + '  ·  ' + lines.toLocaleString() + ' lines';
+      }
+      refreshStart();
+    };
+    r.readAsText(f);
+  });
+
+  $('wordlist').addEventListener('input', () => {
+    bigWordlist = null;
+    $('wlinfo').textContent = '';
+    refreshStart();
+  });
+
+  $('hybrid').addEventListener('change', refreshStart);
+
+  // ---------- charset ----------
+  function buildCharset() {
+    let cs = '';
+    if ($('c-lower').checked) cs += 'abcdefghijklmnopqrstuvwxyz';
+    if ($('c-upper').checked) cs += 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+    if ($('c-digit').checked) cs += '0123456789';
+    if ($('c-sym').checked) cs += '!@#$%^&*()-_=+[]{};:,.<>?/';
+    const custom = $('c-custom').value;
+    for (const ch of custom) if (!cs.includes(ch)) cs += ch;
+    return cs;
+  }
+
+  // ---------- start gate ----------
+  function refreshStart() {
+    let ok = !!zipFile;
+    if (mode === 'wordlist') {
+      const wl = bigWordlist ? bigWordlist.text : $('wordlist').value;
+      if (!wl.trim()) ok = false;
+    } else {
+      if (!buildCharset().length) ok = false;
+      const mn = parseInt($('minlen').value, 10), mx = parseInt($('maxlen').value, 10);
+      if (!(mn >= 1) || !(mx >= mn)) ok = false;
+    }
+    $('start').disabled = !ok || running;
+  }
+  ['change', 'input'].forEach(ev => {
+    ['c-lower', 'c-upper', 'c-digit', 'c-sym', 'c-custom', 'minlen', 'maxlen'].forEach(id => {
+      $(id).addEventListener(ev, refreshStart);
+    });
+  });
+
+  // ---------- stats ----------
+  function fmtDur(sec) {
+    if (!isFinite(sec) || sec < 0) return '—';
+    if (sec < 1) return '<1s';
+    if (sec < 60) return Math.round(sec) + 's';
+    if (sec < 3600) return Math.floor(sec / 60) + 'm ' + Math.round(sec % 60) + 's';
+    if (sec < 86400) return Math.floor(sec / 3600) + 'h ' + Math.round((sec % 3600) / 60) + 'm';
+    return Math.floor(sec / 86400) + 'd ' + Math.round((sec % 86400) / 3600) + 'h';
+  }
+
+  function setStatus(text, cls) {
+    const s = $('status');
+    s.textContent = text || '';
+    s.className = cls || '';
+  }
+
+  function resetStats() {
+    $('st-attempts').textContent = '0';
+    $('st-speed').textContent = '—';
+    $('st-elapsed').textContent = '0s';
+    $('st-eta').textContent = '—';
+    $('bar').style.width = '0%';
+  }
+
+  // ---------- worker lifecycle ----------
+  function createWorker() {
+    const src = $('worker-src').textContent;
+    const blob = new Blob([src], { type: 'text/javascript' });
+    const url = URL.createObjectURL(blob);
+    const w = new Worker(url);
+    URL.revokeObjectURL(url);
+    return w;
+  }
+
+  function stopWorker() {
+    if (worker) {
+      try { worker.terminate(); } catch (e) {}
+      worker = null;
+    }
+    running = false;
+    $('start').style.display = '';
+    $('cancel').style.display = 'none';
+    refreshStart();
+  }
+
+  $('start').addEventListener('click', () => {
+    if (!zipFile || running) return;
+
+    resetStats();
+    $('result').style.display = 'none';
+    $('meta').textContent = '';
+    setStatus('starting…');
+
+    const cfg = {
+      type: 'start',
+      file: zipFile,
+      mode,
+      hybrid: mode === 'wordlist' ? $('hybrid').checked : false
+    };
+
+    if (mode === 'wordlist') {
+      cfg.wordlist = bigWordlist ? bigWordlist.text : $('wordlist').value;
+    } else {
+      cfg.charset = buildCharset();
+      cfg.minLen = parseInt($('minlen').value, 10);
+      cfg.maxLen = parseInt($('maxlen').value, 10);
+    }
+
+    worker = createWorker();
+    worker.onmessage = onWorkerMessage;
+    worker.onerror = (e) => {
+      setStatus('worker error: ' + (e.message || 'failed to load'), 'bad');
+      stopWorker();
+    };
+
+    running = true;
+    totalCandidates = 0;
+    $('start').disabled = true;
+    $('start').style.display = 'none';
+    $('cancel').style.display = '';
+
+    worker.postMessage(cfg);
+  });
+
+  $('cancel').addEventListener('click', () => {
+    if (worker) worker.postMessage({ type: 'cancel' });
+    setStatus('cancelling…');
+  });
+
+  // ---------- worker messages ----------
+  function onWorkerMessage(e) {
+    const m = e.data;
+    switch (m.type) {
+      case 'meta': {
+        totalCandidates = m.total || 0;
+        const kb = fmtBytes(m.targetSize);
+        $('meta').textContent =
+          'attacking "' + m.targetName + '" (' + kb + ') · ' +
+          m.encryptedCount + ' of ' + m.totalCount + ' entries encrypted · ' +
+          totalCandidates.toLocaleString() + ' candidates queued';
+        setStatus('cracking…');
+        break;
+      }
+      case 'progress': {
+        $('st-attempts').textContent = m.attempts.toLocaleString();
+        $('st-speed').textContent = Math.round(m.speed).toLocaleString() + '/s';
+        $('st-elapsed').textContent = fmtDur(m.elapsed);
+        if (totalCandidates > 0) {
+          const pct = Math.min(100, (m.attempts / totalCandidates) * 100);
+          $('bar').style.width = pct.toFixed(2) + '%';
+          const remain = totalCandidates - m.attempts;
+          $('st-eta').textContent = m.speed > 0 ? fmtDur(remain / m.speed) : '—';
+        } else {
+          $('st-eta').textContent = '—';
+        }
+        break;
+      }
+      case 'found': {
+        $('bar').style.width = '100%';
+        $('st-attempts').textContent = m.attempts.toLocaleString();
+        $('st-elapsed').textContent = fmtDur(m.elapsed);
+        $('rpw').textContent = m.password;
+        $('result').style.display = '';
+        setStatus('hit after ' + m.attempts.toLocaleString() + ' attempts in ' + fmtDur(m.elapsed), 'ok');
+        stopWorker();
+        break;
+      }
+      case 'exhausted': {
+        $('bar').style.width = '100%';
+        setStatus('exhausted — ' + m.attempts.toLocaleString() + ' candidates tried, no match', 'bad');
+        stopWorker();
+        break;
+      }
+      case 'cancelled': {
+        setStatus('cancelled at ' + (e.data.attempts || 0) + ' attempts', 'warn');
+        stopWorker();
+        break;
+      }
+      case 'notencrypted': {
+        setStatus('archive is not encrypted — no password needed', 'warn');
+        stopWorker();
+        break;
+      }
+      case 'error': {
+        setStatus('error: ' + m.message, 'bad');
+        stopWorker();
+        break;
+      }
+    }
+  }
+
+  // ---------- copy ----------
+  $('copy').addEventListener('click', () => {
+    const pw = $('rpw').textContent;
+    if (!pw) return;
+    navigator.clipboard.writeText(pw).then(() => {
+      const b = $('copy');
+      b.textContent = 'copied';
+      setTimeout(() => { b.textContent = 'copy'; }, 1200);
+    }).catch(() => {});
+  });
+})();
+</script>
+</body>
+</html>
